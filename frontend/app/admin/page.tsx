@@ -7,13 +7,19 @@ import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react"; 
 import DigitalPatiABI from "../../utils/DigitalPatiABI.json";
 import { CONTRACT_ADDRESS } from "../../utils/constants";
+import { fetchAllPets, PetData } from "../../utils/fetchPets";
+import PetCard from "../../components/PetCard";
 import Link from "next/link";
 
 export default function DashboardPage() {
   const [account, setAccount] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [status, setStatus] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"my-pets" | "new-record">("my-pets");
+  const [activeTab, setActiveTab] = useState<"my-pets" | "new-record" | "gallery">("my-pets");
+  
+  // --- TÜM PETLER (GALERİ) ---
+  const [allPets, setAllPets] = useState<PetData[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState<boolean>(false);
 
   // --- FORM VERİLERİ ---
   const [petName, setPetName] = useState("");
@@ -37,13 +43,29 @@ export default function DashboardPage() {
       
       // Cüzdan bağlandığı an hayvanları aramaya başla
       fetchMyPets(address, provider);
+      // Galeriyi de yükle
+      loadAllPets();
 
     } catch (err: any) {
       alert("Hata: " + err.message);
     }
   };
 
-  // 2. KULLANICININ HAYVANLARINI BUL (MVP İÇİN DÖNGÜ)
+  // 2. TÜM PETLERİ ÇEK (GALERİ İÇİN)
+  const loadAllPets = async () => {
+    setGalleryLoading(true);
+    try {
+      const pets = await fetchAllPets();
+      setAllPets(pets);
+    } catch (error) {
+      console.error("Petler yüklenemedi:", error);
+      alert("Petler yüklenirken bir hata oluştu. Lütfen Hardhat node'unun çalıştığından emin olun.");
+    } finally {
+      setGalleryLoading(false);
+    }
+  };
+
+  // 3. KULLANICININ HAYVANLARINI BUL (MVP İÇİN DÖNGÜ)
   const fetchMyPets = async (userAddress: string, provider: any) => {
     setLoading(true);
     const foundPets = [];
@@ -221,6 +243,7 @@ export default function DashboardPage() {
       
       // Listeyi güncelle ve sekmeyi değiştir
       fetchMyPets(account, provider);
+      loadAllPets(); // Galeriyi de yenile
       setActiveTab("my-pets");
       
       // Formu temizle
@@ -289,12 +312,18 @@ export default function DashboardPage() {
                 <h1 className="text-2xl font-bold text-gray-800">Merhaba, Sahip 👋</h1>
                 <p className="text-gray-500 text-sm">Cüzdan: {account.slice(0,6)}...{account.slice(-4)}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
                 <button 
                     onClick={() => setActiveTab("my-pets")}
                     className={`px-6 py-2 rounded-full font-bold transition ${activeTab === "my-pets" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-100"}`}
                 >
                     🐾 Patilerim
+                </button>
+                <button 
+                    onClick={() => setActiveTab("gallery")}
+                    className={`px-6 py-2 rounded-full font-bold transition ${activeTab === "gallery" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-100"}`}
+                >
+                    🖼️ Galeri
                 </button>
                 <button 
                     onClick={() => setActiveTab("new-record")}
@@ -371,7 +400,56 @@ export default function DashboardPage() {
             </div>
         )}
 
-        {/* --- SEKME 2: YENİ KAYIT --- */}
+        {/* --- SEKME 2: GALERİ (TÜM PETLER) --- */}
+        {activeTab === "gallery" && (
+            <div className="animate-in fade-in duration-500">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-gray-800">🖼️ Kayıtlı Dostlarım</h2>
+                    <button
+                        onClick={loadAllPets}
+                        disabled={galleryLoading}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 disabled:opacity-50"
+                    >
+                        <RefreshCw size={16} className={galleryLoading ? "animate-spin" : ""} />
+                        Yenile
+                    </button>
+                </div>
+
+                {/* Yükleniyor */}
+                {galleryLoading && (
+                    <div className="text-center py-20">
+                        <Loader2 className="animate-spin mx-auto mb-4 w-12 h-12 text-blue-600" />
+                        <p className="text-gray-500">Blockchain'den petler yükleniyor...</p>
+                    </div>
+                )}
+
+                {/* Pet Listesi */}
+                {!galleryLoading && allPets.length === 0 && (
+                    <div className="bg-white p-12 rounded-3xl text-center shadow-sm">
+                        <PawPrint className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-gray-700 mb-2">Henüz hiç pet kaydedilmemiş</h3>
+                        <p className="text-gray-400 mb-6">İlk pet'i kaydetmek için "Yeni Ekle" sekmesine gidin.</p>
+                        <button 
+                            onClick={() => setActiveTab("new-record")} 
+                            className="text-blue-600 font-bold hover:underline"
+                        >
+                            Şimdi Kaydet
+                        </button>
+                    </div>
+                )}
+
+                {/* Pet Kartları Grid */}
+                {!galleryLoading && allPets.length > 0 && (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {allPets.map((pet) => (
+                            <PetCard key={pet.id} pet={pet} />
+                        ))}
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* --- SEKME 3: YENİ KAYIT --- */}
         {activeTab === "new-record" && (
             <div className="bg-white p-8 rounded-3xl shadow-sm max-w-2xl mx-auto animate-in slide-in-from-right-8 duration-300">
                  <h2 className="text-xl font-bold mb-6 flex items-center gap-2">

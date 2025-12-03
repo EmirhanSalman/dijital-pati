@@ -8,6 +8,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract DigitalPati is ERC721URIStorage, Ownable {
     uint256 private _nextTokenId;
 
+    // Toplam token sayısını döndürür (public getter)
+    function totalSupply() public view returns (uint256) {
+        return _nextTokenId;
+    }
+
     // ADMIN ÜCRETİ (Örn: 0.001 ETH)
     uint256 public constant LOST_REPORT_FEE = 0.001 ether;
 
