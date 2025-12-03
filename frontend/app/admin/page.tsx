@@ -217,22 +217,40 @@ export default function DashboardPage() {
 
       // 5. mintPet fonksiyonunu çağır (metadataUrl ve contactInfo gönder)
       setStatus("⏳ İşlem onayınızı bekliyor...");
-      const tx = await contract.mintPet(metadataUrl, petContact);
+      
+      // Gas limit belirle (Hardhat local için)
+      const tx = await contract.mintPet(metadataUrl, petContact, {
+        gasLimit: 500000 // Hardhat local için yeterli
+      });
       
       setStatus("⏳ İşlem blockchain'e yazılıyor...");
       const receipt = await tx.wait();
       
-      // Token ID'yi almak için event'i dinle
+      // Token ID'yi almak için event'i parse et (ethers.js v6)
       let tokenId = null;
-      if (receipt.logs) {
-        // PetMinted event'ini bul
-        const eventFragment = contract.interface.getEvent("PetMinted");
-        const eventTopic = contract.interface.getEventTopic(eventFragment);
-        const eventLog = receipt.logs.find((log: any) => log.topics[0] === eventTopic);
-        if (eventLog) {
-          const decoded = contract.interface.decodeEventLog(eventFragment, eventLog.data, eventLog.topics);
-          tokenId = decoded.tokenId.toString();
+      try {
+        // Receipt'ten event'leri parse et
+        if (receipt.logs && receipt.logs.length > 0) {
+          for (const log of receipt.logs) {
+            try {
+              const parsedLog = contract.interface.parseLog({
+                topics: log.topics,
+                data: log.data
+              });
+              
+              if (parsedLog && parsedLog.name === "PetMinted") {
+                tokenId = parsedLog.args.tokenId.toString();
+                break;
+              }
+            } catch (e) {
+              // Bu log başka bir event olabilir, devam et
+              continue;
+            }
+          }
         }
+      } catch (error) {
+        console.warn("Event parse edilemedi (bu normal olabilir):", error);
+        // Event parse edilemese bile işlem başarılı
       }
 
       setStatus("✅ NFT Başarıyla Oluşturuldu!");
