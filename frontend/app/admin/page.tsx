@@ -6,9 +6,8 @@ import { Wallet, Loader2, Save, Image as ImageIcon, RefreshCw, QrCode, Search, P
 import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react"; 
 import DigitalPatiABI from "../../utils/DigitalPatiABI.json";
+import { CONTRACT_ADDRESS } from "../../utils/constants";
 import Link from "next/link";
-
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 export default function DashboardPage() {
   const [account, setAccount] = useState<string>("");
@@ -99,6 +98,7 @@ export default function DashboardPage() {
     }
   };
 
+  // Resim yükleme (IPFS)
   const uploadToPinata = async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -115,43 +115,125 @@ export default function DashboardPage() {
       },
       body: formData,
     });
-    if (!res.ok) throw new Error("Pinata Hatası");
+    if (!res.ok) throw new Error("Pinata Resim Yükleme Hatası");
     const resData = await res.json();
     return `https://gateway.pinata.cloud/ipfs/${resData.IpfsHash}`;
   };
 
-  // 4. MINT (KAYIT)
+  // Metadata JSON oluştur ve IPFS'e yükle
+  const uploadMetadataToPinata = async (imageUrl: string, petName: string, contactInfo: string) => {
+    const metadata = {
+      name: `DijitalPati - ${petName}`,
+      description: `Evcil hayvan kimlik kaydı: ${petName}`,
+      image: imageUrl,
+      attributes: [
+        {
+          trait_type: "İletişim",
+          value: contactInfo
+        },
+        {
+          trait_type: "Durum",
+          value: "Güvende"
+        }
+      ]
+    };
+
+    const formData = new FormData();
+    const blob = new Blob([JSON.stringify(metadata)], { type: "application/json" });
+    formData.append("file", blob, "metadata.json");
+    
+    const pinataMetadata = JSON.stringify({ name: `DijitalPati-Metadata-${petName}` });
+    formData.append("pinataMetadata", pinataMetadata);
+    const options = JSON.stringify({ cidVersion: 0 });
+    formData.append("pinataOptions", options);
+
+    const res = await fetch("https://api.pinata.cloud/pinning/pinFileToIPFS", {
+      method: "POST",
+      headers: {
+          pinata_api_key: process.env.NEXT_PUBLIC_PINATA_API_KEY!,
+          pinata_secret_api_key: process.env.NEXT_PUBLIC_PINATA_SECRET_KEY!,
+      },
+      body: formData,
+    });
+    
+    if (!res.ok) throw new Error("Pinata Metadata Yükleme Hatası");
+    const resData = await res.json();
+    return `https://gateway.pinata.cloud/ipfs/${resData.IpfsHash}`;
+  };
+
+  // 4. MINT (KAYIT) - Blockchain'e NFT Oluştur
   const handleMint = async () => {
     if (!petName || !petContact || !selectedImage) {
-      alert("Eksik bilgi!"); return;
+      alert("Lütfen tüm alanları doldurun!"); 
+      return;
     }
+    
     setLoading(true);
-    setStatus("Resim Yükleniyor...");
+    setStatus("📤 Resim IPFS'e yükleniyor...");
 
     try {
+      // 1. Resmi IPFS'e yükle
       const imageUrl = await uploadToPinata(selectedImage);
-      setStatus("Blockchain İşlemi...");
+      setStatus("📝 Metadata oluşturuluyor...");
 
+      // 2. Metadata JSON oluştur ve IPFS'e yükle
+      const metadataUrl = await uploadMetadataToPinata(imageUrl, petName, petContact);
+      setStatus("⛓️ Blockchain işlemi başlatılıyor...");
+
+      // 3. MetaMask provider'ı al
+      // @ts-ignore
+      if (!window.ethereum) {
+        throw new Error("MetaMask bulunamadı! Lütfen MetaMask yükleyin.");
+      }
+      
       // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      
+      // 4. Contract instance oluştur
       const contract = new ethers.Contract(CONTRACT_ADDRESS, DigitalPatiABI.abi, signer);
 
-      const tx = await contract.mintPet(imageUrl, petContact);
-      await tx.wait();
+      // 5. mintPet fonksiyonunu çağır (metadataUrl ve contactInfo gönder)
+      setStatus("⏳ İşlem onayınızı bekliyor...");
+      const tx = await contract.mintPet(metadataUrl, petContact);
+      
+      setStatus("⏳ İşlem blockchain'e yazılıyor...");
+      const receipt = await tx.wait();
+      
+      // Token ID'yi almak için event'i dinle
+      let tokenId = null;
+      if (receipt.logs) {
+        // PetMinted event'ini bul
+        const eventFragment = contract.interface.getEvent("PetMinted");
+        const eventTopic = contract.interface.getEventTopic(eventFragment);
+        const eventLog = receipt.logs.find((log: any) => log.topics[0] === eventTopic);
+        if (eventLog) {
+          const decoded = contract.interface.decodeEventLog(eventFragment, eventLog.data, eventLog.topics);
+          tokenId = decoded.tokenId.toString();
+        }
+      }
 
-      setStatus("✅ Başarılı!");
-      alert("Kayıt Başarılı!");
+      setStatus("✅ NFT Başarıyla Oluşturuldu!");
+      const successMessage = tokenId 
+        ? `🎉 Başarılı! NFT'niz blockchain'e kaydedildi.\n\nToken ID: #${tokenId}\nİşlem Hash: ${tx.hash.slice(0, 10)}...`
+        : `🎉 Başarılı! NFT'niz blockchain'e kaydedildi.\n\nİşlem Hash: ${tx.hash}`;
+      alert(successMessage);
       
       // Listeyi güncelle ve sekmeyi değiştir
       fetchMyPets(account, provider);
       setActiveTab("my-pets");
       
       // Formu temizle
-      setPetName(""); setPetContact(""); setSelectedImage(null); setPreviewUrl("");
+      setPetName(""); 
+      setPetContact(""); 
+      setSelectedImage(null); 
+      setPreviewUrl("");
+      setStatus("");
 
     } catch (error: any) {
-        setStatus("❌ Hata: " + error.message);
+        console.error("Mint Hatası:", error);
+        setStatus("❌ Hata: " + (error.message || "Bilinmeyen hata"));
+        alert("Hata: " + (error.message || "NFT oluşturulamadı. Lütfen tekrar deneyin."));
     } finally {
       setLoading(false);
     }
@@ -247,7 +329,7 @@ export default function DashboardPage() {
                 {myPets.map((pet) => (
                     <div key={pet.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition">
                         <div className="relative h-48 bg-gray-100">
-                            <Image src={pet.image} alt="Pati" fill className="object-cover"/>
+                            <Image src={pet.image} alt="Pati" fill className="object-cover" sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"/>
                             <div className={`absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-bold text-white ${pet.isLost ? "bg-red-500 animate-pulse" : "bg-green-500"}`}>
                                 {pet.isLost ? "KAYIP!" : "GÜVENDE"}
                             </div>
@@ -299,7 +381,7 @@ export default function DashboardPage() {
                  <div className="space-y-6">
                     <div className="w-full h-64 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center relative bg-gray-50 group hover:bg-gray-100 transition cursor-pointer">
                         {previewUrl ? (
-                            <Image src={previewUrl} alt="Önizleme" fill className="object-cover rounded-2xl" />
+                            <Image src={previewUrl} alt="Önizleme" fill className="object-cover rounded-2xl" sizes="(max-width: 768px) 100vw, 768px"/>
                         ) : (
                             <div className="text-center text-gray-400"><ImageIcon className="mx-auto mb-2"/>Fotoğraf Seç</div>
                         )}
