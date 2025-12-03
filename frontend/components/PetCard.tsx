@@ -1,6 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ExternalLink, MapPin, Phone } from "lucide-react";
+import { ExternalLink, MapPin, Phone, QrCode, X } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { PetData } from "../utils/fetchPets";
 
 interface PetCardProps {
@@ -8,7 +12,77 @@ interface PetCardProps {
 }
 
 export default function PetCard({ pet }: PetCardProps) {
+  const [showQRModal, setShowQRModal] = useState(false);
+  const petUrl = typeof window !== "undefined" ? `${window.location.origin}/pet/${pet.id}` : "";
+
   return (
+    <>
+      {/* QR Modal */}
+      {showQRModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowQRModal(false)}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 animate-in zoom-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">QR Kod</h3>
+              <button
+                onClick={() => setShowQRModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition"
+              >
+                <X size={24} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="text-center mb-6">
+              <p className="text-gray-600 mb-4">{pet.name}</p>
+              <div className="bg-white p-4 rounded-2xl inline-block border-2 border-gray-200">
+                <QRCodeSVG 
+                  id="qr-code-svg"
+                  value={petUrl}
+                  size={256}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-4 break-all">{petUrl}</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  // SVG'yi indir
+                  const svg = document.querySelector('#qr-code-svg') as SVGSVGElement;
+                  if (svg) {
+                    const svgData = new XMLSerializer().serializeToString(svg);
+                    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+                    const url = URL.createObjectURL(svgBlob);
+                    const link = document.createElement('a');
+                    link.download = `dijital-pati-${pet.id}-qr.svg`;
+                    link.href = url;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                  }
+                }}
+                className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition"
+              >
+                QR Kod İndir
+              </button>
+              <button
+                onClick={() => setShowQRModal(false)}
+                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 transition"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pet Card */}
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-all duration-300 group">
       {/* Resim Alanı */}
       <div className="relative h-64 bg-gray-100 overflow-hidden">
@@ -61,16 +135,27 @@ export default function PetCard({ pet }: PetCardProps) {
           </span>
         </div>
 
-        {/* Detay Linki */}
-        <Link
-          href={`/pet/${pet.id}`}
-          className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 text-sm"
-        >
-          <span>Detayları Gör</span>
-          <ExternalLink size={16} />
-        </Link>
+        {/* Butonlar */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowQRModal(true)}
+            className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl font-bold hover:bg-purple-700 transition flex items-center justify-center gap-2 text-sm"
+            title="QR Kod Göster"
+          >
+            <QrCode size={16} />
+            QR Kod
+          </button>
+          <Link
+            href={`/pet/${pet.id}`}
+            className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2 text-sm"
+          >
+            <span>Detay</span>
+            <ExternalLink size={16} />
+          </Link>
+        </div>
       </div>
     </div>
+    </>
   );
 }
 
