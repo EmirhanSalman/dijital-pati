@@ -3,20 +3,12 @@
 import { useState, useEffect, use } from "react";
 import { ethers } from "ethers";
 import { Phone, CheckCircle, AlertTriangle, Loader2, MapPin } from "lucide-react";
+import PetFoundButton from "@/components/PetFoundButton";
 import DigitalPatiABI from "../../../utils/DigitalPatiABI.json";
-import { CONTRACT_ADDRESS, LOCALHOST_RPC } from "../../../utils/constants";
 import Image from "next/image";
 
-// IPFS URL'ini gateway URL'ine çevirir
-const convertIPFSToGateway = (ipfsUrl: string): string => {
-  if (ipfsUrl.startsWith("ipfs://")) {
-    return ipfsUrl.replace("ipfs://", "https://gateway.pinata.cloud/ipfs/");
-  }
-  if (ipfsUrl.startsWith("https://ipfs.io/ipfs/")) {
-    return ipfsUrl.replace("https://ipfs.io/ipfs/", "https://gateway.pinata.cloud/ipfs/");
-  }
-  return ipfsUrl;
-};
+// SENİN SÖZLEŞME ADRESİN
+const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 export default function PetPage({ params }: { params: Promise<{ id: string }> }) {
   // Next.js 15+ için params bir Promise'dir, onu 'use' ile çözüyoruz
@@ -25,6 +17,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   const [petData, setPetData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [ownerAddress, setOwnerAddress] = useState<string | null>(null);
 
   useEffect(() => {
     // ID kontrolünü güçlendirdik: "0" stringi JavaScript'te bazen falsy karışıklığı yaratabilir
@@ -37,11 +30,8 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     try {
       console.log(`🚀 İşlem Başlıyor... Hedef ID: ${id}`);
       
-      // 1. Blockchain'e "Sadece Okuma" (Read-Only) modunda bağlan (Cüzdan gerektirmez)
-      const provider = new ethers.JsonRpcProvider(LOCALHOST_RPC, {
-        name: "localhost",
-        chainId: 31337
-      });
+      // 1. Blockchain'e "Sadece Okuma" (Read-Only) modunda bağlan
+      const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
       const contract = new ethers.Contract(CONTRACT_ADDRESS, DigitalPatiABI.abi, provider);
 
       // 2. Blockchain'den Durumu Çek
@@ -52,6 +42,10 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       const isLost = status[0]; // status.isLost
       const contactInfo = status[1]; // status.contactInfo
 
+      // 2.5. Owner address'i çek
+      const owner = await contract.ownerOf(id);
+      setOwnerAddress(owner);
+
       // 3. IPFS Linkini (TokenURI) Çek
       console.log("🔗 TokenURI (IPFS Linki) isteniyor...");
       const tokenURI = await contract.tokenURI(id);
@@ -61,17 +55,13 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
         throw new Error("Blockchain'de bu ID için bir IPFS linki kayıtlı değil.");
       }
 
-      // 4. Metadata veya Resim Kontrolü
-      // IPFS URL'ini gateway'e çevir
-      const gatewayURI = convertIPFSToGateway(tokenURI);
-      
-      // Varsayılan değerler
+      // 4. Metadata veya Resim Kontrolü (HATA ÇÖZÜMÜ BURADA)
+      // Varsayılan değerler: Eğer JSON yoksa, URI'nin kendisini resim olarak kabul et.
       let finalName = `Pati #${id}`;
-      let finalDescription = "Evcil hayvan kimlik kaydı";
-      let finalImage = gatewayURI;
+      let finalImage = tokenURI;
 
       try {
-        const response = await fetch(gatewayURI);
+        const response = await fetch(tokenURI);
         const contentType = response.headers.get("content-type");
 
         // Eğer gelen veri bir JSON ise (Metadata ise)
@@ -79,8 +69,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
             const metadata = await response.json();
             console.log("✅ Metadata JSON:", metadata);
             finalName = metadata.name || finalName;
-            finalDescription = metadata.description || finalDescription;
-            finalImage = metadata.image ? convertIPFSToGateway(metadata.image) : gatewayURI;
+            finalImage = metadata.image || finalImage;
         } else {
             // JSON değilse (muhtemelen doğrudan resimdir), olduğu gibi kullan
             console.warn("⚠️ TokenURI bir JSON dosyası değil, doğrudan resim dosyası olarak algılandı.");
@@ -92,7 +81,6 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       setPetData({
         id: id,
         name: finalName,
-        description: finalDescription,
         image: finalImage,
         isLost: isLost,
         contact: contactInfo
@@ -135,10 +123,10 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-2xl w-full">
+      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-md w-full">
         
-        {/* Resim Alanı - Büyük Boy */}
-        <div className="relative h-96 md:h-[500px] w-full bg-gray-200">
+        {/* Resim Alanı */}
+        <div className="relative h-72 w-full bg-gray-200">
           {petData?.image ? (
             <Image 
               src={petData.image} 
@@ -165,40 +153,25 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
         {petData && (
         <div className="p-8 text-center">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">{petData.name}</h1>
-          {petData.description && (
-            <p className="text-gray-500 text-sm mb-2">{petData.description}</p>
-          )}
-          <p className="text-gray-400 text-xs mb-6">ID: #{petData.id}</p>
+          <p className="text-gray-400 text-sm mb-6">ID: #{petData.id}</p>
 
-          {/* KAYIP DURUMU - BÜYÜK UYARI */}
           {petData.isLost ? (
-            <>
-              <div className="bg-red-600 text-white rounded-2xl p-8 mb-6 animate-pulse shadow-2xl">
-                <AlertTriangle className="w-16 h-16 mx-auto mb-4" />
-                <h2 className="text-3xl font-bold mb-2">⚠️ KAYIP HAYVAN ⚠️</h2>
-                <p className="text-lg mb-6">Bu dostumuz kaybolmuş! Lütfen sahibine ulaşın.</p>
-              </div>
+            <div className="bg-red-50 border-2 border-red-100 rounded-2xl p-6 mb-6">
+              <h3 className="text-red-800 font-bold mb-2">SAHİBİNİN BİLGİLERİ</h3>
+              <p className="text-gray-600 text-sm mb-4">Bu dostumuz kaybolmuş! Lütfen aşağıdaki numaradan sahibine ulaşın.</p>
               
-              <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 mb-6">
-                <h3 className="text-red-800 font-bold text-xl mb-3">📞 SAHİBİNİN İLETİŞİM BİLGİSİ</h3>
-                <p className="text-gray-700 text-sm mb-4">Lütfen aşağıdaki numaradan sahibine ulaşın:</p>
-                
-                <a 
-                  href={`tel:${petData.contact}`} 
-                  className="bg-red-600 text-white w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 hover:bg-red-700 transition shadow-lg shadow-red-300 mb-3"
-                >
-                  <Phone size={24} /> {petData.contact}
-                </a>
-                
-                <p className="text-xs text-gray-500 mt-2">
-                  Telefon numarasına tıklayarak direkt arayabilirsiniz
-                </p>
-              </div>
-            </>
+              <a href={`tel:${petData.contact}`} className="bg-red-600 text-white w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-red-700 transition shadow-lg shadow-red-200 mb-4">
+                <Phone /> {petData.contact}
+              </a>
+              
+              {/* Bildirim Butonu */}
+              <PetFoundButton petId={id} ownerAddress={ownerAddress} />
+            </div>
           ) : (
-            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6 mb-6">
-              <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
-              <h3 className="text-green-800 font-bold text-xl mb-2">✅ Durum: Güvende</h3>
+            <div className="bg-green-50 border-2 border-green-100 rounded-2xl p-6 mb-6">
+              <h3 className="text-green-800 font-bold flex items-center justify-center gap-2">
+                <CheckCircle size={20}/> Durum: Güvende
+              </h3>
               <p className="text-gray-600 text-sm mt-2">
                 Bu evcil hayvanın sahibi tarafından herhangi bir kayıp bildirimi yapılmamıştır.
               </p>

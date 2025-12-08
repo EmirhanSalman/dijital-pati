@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "./globals.css"; // CSS BURADAN ÇAĞRILIYOR
+import "./globals.css";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import NextTopLoader from "nextjs-toploader";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "DijitalPati",
-  description: "Blockchain Evcil Hayvan Takip Sistemi",
+  title: "DijitalPati - Blockchain Evcil Hayvan Takip Sistemi",
+  description: "Evcil dostlarınızı blockchain güvencesiyle koruyun. QR kod takip, NFT kimlik kartları ve sosyal özellikler.",
 };
 
 export default function RootLayout({
@@ -16,7 +19,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <NextTopLoader
+          color="hsl(var(--primary))"
+          showSpinner={false}
+          height={3}
+        />
+        <div className="flex min-h-screen flex-col">
+          <Navbar />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </div>
+      </body>
     </html>
   );
 }
