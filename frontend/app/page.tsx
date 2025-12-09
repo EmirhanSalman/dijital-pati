@@ -3,11 +3,19 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import HomePageClient from "@/components/HomePageClient";
 import NewsSection from "@/components/NewsSection";
+import HowItWorks from "@/components/HowItWorks";
+import FeaturesSection from "@/components/FeaturesSection";
 
 export default function Home() {
   return (
-    <div className="flex flex-col">
+    <main className="flex flex-col min-h-screen">
       <HomePageClient />
+
+      {/* How It Works Section */}
+      <HowItWorks />
+
+      {/* Features Section - Bento Grid */}
+      <FeaturesSection />
 
       {/* News Section - Server Component */}
       <NewsSection />
@@ -39,6 +47,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-    </div>
+    </main>
   );
 }

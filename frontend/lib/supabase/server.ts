@@ -618,3 +618,136 @@ export async function getAdminStats(): Promise<AdminStats> {
     };
   }
 }
+
+export interface Pet {
+  id: string;
+  token_id: string;
+  name: string;
+  breed: string;
+  description: string | null;
+  image_url: string;
+  owner_address: string;
+  owner_id: string | null;
+  contact_info: string | null; // Backwards compatibility
+  contact_phone: string | null;
+  contact_email: string | null;
+  is_lost: boolean;
+  created_at: string;
+}
+
+/**
+ * Kullanıcının sahip olduğu pet'leri getirir (owner_address'e göre)
+ */
+export async function getUserPets(ownerAddress: string): Promise<Pet[]> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("pets")
+      .select("*")
+      .eq("owner_address", ownerAddress.toLowerCase())
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("getUserPets error:", error);
+      // Eğer pets tablosu yoksa boş array döndür
+      if (error.code === "42P01") {
+        return [];
+      }
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error("getUserPets error:", error);
+    return [];
+  }
+}
+
+/**
+ * UUID format kontrolü
+ */
+function isUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+}
+
+/**
+ * Pet ID'ye göre pet bilgilerini getirir (esnek arama: UUID veya token_id)
+ */
+export async function getPetById(petId: string): Promise<Pet | null> {
+  try {
+    const supabase = await createClient();
+    
+    // Esnek sorgu oluştur
+    let query = supabase.from("pets").select("*");
+
+    // UUID formatını kontrol et
+    if (isUUID(petId)) {
+      // UUID formatında ise id sütununda ara
+      query = query.eq("id", petId);
+    } else {
+      // Sayısal veya diğer formatlarda token_id sütununda ara
+      query = query.eq("token_id", petId);
+    }
+
+    // maybeSingle() kullan - kayıt yoksa null döner, hata fırlatmaz
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      console.error("getPetById error:", error);
+      // Eğer pets tablosu yoksa null döndür
+      if (error.code === "42P01") {
+        return null;
+      }
+      return null;
+    }
+
+    return data || null;
+  } catch (error) {
+    console.error("getPetById error:", error);
+    return null;
+  }
+}
+
+/**
+ * Pet'in kayıp durumunu değiştirir (Supabase'de)
+ */
+export async function togglePetLostStatus(tokenId: string, isLost: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "Giriş yapmanız gerekiyor." };
+    }
+
+    // Pet'in sahibi olduğunu kontrol et
+    const pet = await getPetById(tokenId);
+    if (!pet) {
+      return { success: false, error: "Pet bulunamadı." };
+    }
+
+    // Owner kontrolü (owner_id veya owner_address ile)
+    const profile = await getUserProfile();
+    if (pet.owner_id !== user.id && pet.owner_address.toLowerCase() !== profile?.wallet_address?.toLowerCase()) {
+      return { success: false, error: "Bu pet'e erişim yetkiniz yok." };
+    }
+
+    const { error } = await supabase
+      .from("pets")
+      .update({ is_lost: isLost })
+      .eq("token_id", tokenId);
+
+    if (error) {
+      console.error("togglePetLostStatus error:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("togglePetLostStatus error:", error);
+    return { success: false, error: error.message || "Durum güncellenirken bir hata oluştu." };
+  }
+}

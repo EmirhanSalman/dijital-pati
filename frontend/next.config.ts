@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "ipfs.io",
       },
+      {
+        protocol: "https",
+        hostname: "khfffcjhcgkthblebeik.supabase.co",
+        port: "",
+        pathname: "/storage/v1/object/public/**",
+      },
     ],
   },
 };

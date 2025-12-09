@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, Dog, Wallet, LogIn, UserPlus, LogOut, Shield } from "lucide-react";
+import { Menu, Dog, Wallet, LogIn, UserPlus, LogOut, Shield, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -111,6 +111,12 @@ export default function NavbarClient({
           {isLoggedIn ? (
             <>
               {notificationBell}
+              <Button variant="default" size="sm" asChild>
+                <Link href="/create-pet">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Evcil Hayvan Ekle
+                </Link>
+              </Button>
               <Button variant="outline" size="sm">
                 <Wallet className="h-4 w-4 mr-2" />
                 Cüzdan Bağla
@@ -222,6 +228,12 @@ export default function NavbarClient({
                         </div>
                       )}
                     </div>
+                    <Button variant="default" className="w-full" asChild>
+                      <Link href="/create-pet" onClick={() => setIsOpen(false)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Evcil Hayvan Ekle
+                      </Link>
+                    </Button>
                     <Button variant="outline" className="w-full" asChild>
                       <Link href="/wallet" onClick={() => setIsOpen(false)}>
                         <Wallet className="h-4 w-4 mr-2" />
