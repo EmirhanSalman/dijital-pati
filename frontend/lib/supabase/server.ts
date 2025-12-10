@@ -711,6 +711,66 @@ function isUUID(str: string): boolean {
 }
 
 /**
+ * Pet'leri filtrelerle getirir
+ * @param filters - Filtreleme parametreleri
+ * @returns Pet listesi
+ */
+export async function getPets(filters?: {
+  query?: string;
+  type?: string;
+  city?: string;
+  sort?: string;
+}): Promise<Pet[]> {
+  try {
+    const supabase = await createClient();
+    let query = supabase.from("pets").select("*");
+
+    // Arama sorgusu (isim veya açıklama)
+    if (filters?.query && filters.query.trim()) {
+      const searchTerm = filters.query.trim();
+      // Supabase'de birden fazla alanda arama için or() kullanılır
+      // Format: 'column1.operator.value1,column2.operator.value2'
+      query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+    }
+
+    // Tür filtresi
+    if (filters?.type && filters.type !== "all") {
+      query = query.eq("breed", filters.type);
+    }
+
+    // Şehir filtresi
+    if (filters?.city && filters.city !== "all") {
+      query = query.ilike("city", `%${filters.city}%`);
+    }
+
+    // Sıralama
+    if (filters?.sort === "oldest") {
+      query = query.order("created_at", { ascending: true });
+    } else {
+      // Varsayılan: En yeniler
+      query = query
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false });
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("getPets error:", error);
+      if (error.code === "42P01") {
+        return [];
+      }
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error("getPets unexpected error:", error);
+    return [];
+  }
+}
+
+/**
  * Pet ID'ye göre pet bilgilerini getirir (esnek arama: UUID veya token_id)
  */
 export async function getPetById(petId: string): Promise<Pet | null> {
