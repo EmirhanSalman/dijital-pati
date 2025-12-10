@@ -40,6 +40,8 @@ export default function CreatePetPage() {
     description: "",
     phone: "",
     email: "",
+    city: "",
+    district: "",
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -242,6 +244,8 @@ export default function CreatePetPage() {
           ownerAddress: walletAddress,
           phone: formData.phone || null,
           email: formData.email || null,
+          city: formData.city || null,
+          district: formData.district || null,
         }),
       });
 
@@ -552,6 +556,51 @@ export default function CreatePetPage() {
                   <p className="text-xs text-yellow-400 mt-1">
                     * En az bir iletişim yöntemi (telefon veya e-posta) gereklidir
                   </p>
+                </div>
+
+                {/* Location Information */}
+                <div className="pt-4 border-t border-white/10">
+                  <h3 className="text-lg font-semibold text-white mb-4">
+                    Konum Bilgileri
+                  </h3>
+                  
+                  {/* City */}
+                  <div className="mb-4">
+                    <Label htmlFor="city" className="text-white">
+                      İl
+                    </Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) =>
+                        setFormData({ ...formData, city: e.target.value })
+                      }
+                      className="bg-slate-900/50 border-white/10 text-white mt-2"
+                      placeholder="Örn: İstanbul, Ankara..."
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Kaybolma durumunda arama yapılacak şehir
+                    </p>
+                  </div>
+
+                  {/* District */}
+                  <div>
+                    <Label htmlFor="district" className="text-white">
+                      İlçe
+                    </Label>
+                    <Input
+                      id="district"
+                      value={formData.district}
+                      onChange={(e) =>
+                        setFormData({ ...formData, district: e.target.value })
+                      }
+                      className="bg-slate-900/50 border-white/10 text-white mt-2"
+                      placeholder="Örn: Kadıköy, Çankaya..."
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Kaybolma durumunda arama yapılacak ilçe
+                    </p>
+                  </div>
                 </div>
 
                 {/* Error Message */}

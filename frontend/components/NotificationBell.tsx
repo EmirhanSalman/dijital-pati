@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,30 +9,136 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { markNotificationAsRead, markAllNotificationsAsRead } from "@/app/actions/notifications";
+import { markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from "@/app/actions/notifications";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-
-interface Notification {
-  id: string;
-  type: 'reply' | 'lost_pet_found' | 'mention' | 'system';
-  message: string;
-  link: string | null;
-  is_read: boolean;
-  created_at: string;
-}
+import { createClient } from "@/lib/supabase/client";
+import type { Notification } from "@/lib/supabase/server";
+import { X } from "lucide-react";
 
 interface NotificationBellProps {
   notifications: Notification[];
 }
 
-export default function NotificationBell({ notifications }: NotificationBellProps) {
+export default function NotificationBell({ notifications: initialNotifications }: NotificationBellProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [localNotifications, setLocalNotifications] = useState(notifications);
+  const [localNotifications, setLocalNotifications] = useState(initialNotifications);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const subscriptionRef = useRef<any>(null);
 
   const unreadCount = localNotifications.filter((n) => !n.is_read).length;
+
+  // Bildirimleri çek
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setLocalNotifications([]);
+        return;
+      }
+
+      const { data: notifications, error } = await supabase
+        .from("notifications")
+        .select("id, user_id, type, message, link, is_read, metadata, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error("Fetch notifications error:", error);
+        return;
+      }
+
+      if (notifications) {
+        setLocalNotifications(
+          notifications.map((notif) => ({
+            id: notif.id,
+            user_id: notif.user_id,
+            type: notif.type as Notification["type"],
+            message: notif.message,
+            link: notif.link || null,
+            is_read: notif.is_read,
+            metadata: (notif.metadata as Record<string, any>) || {},
+            created_at: notif.created_at,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error("Fetch notifications error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Realtime subscription kur
+  useEffect(() => {
+    let mounted = true;
+
+    const setupRealtimeSubscription = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || !mounted) {
+        return;
+      }
+
+      // Mevcut subscription'ı temizle
+      if (subscriptionRef.current) {
+        await subscriptionRef.current.unsubscribe();
+      }
+
+      // Yeni subscription oluştur
+      const channel = supabase
+        .channel(`notifications:${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log("Notification change:", payload);
+            // Bildirimler değiştiğinde yeniden çek
+            if (mounted) {
+              fetchNotifications();
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            console.log("Realtime subscription aktif");
+          }
+        });
+
+      subscriptionRef.current = channel;
+    };
+
+    setupRealtimeSubscription();
+
+    // Cleanup
+    return () => {
+      mounted = false;
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+      }
+    };
+  }, []);
+
+  // İlk yüklemede bildirimleri çek
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.is_read) {
@@ -44,6 +150,12 @@ export default function NotificationBell({ notifications }: NotificationBellProp
             n.id === notification.id ? { ...n, is_read: true } : n
           )
         );
+      } else {
+        // Hata durumunda logla
+        console.error('handleNotificationClick - markNotificationAsRead failed:', result.error);
+        // Hata olsa bile UI'ı güncelle (optimistic update)
+        // Ama kullanıcıya hata mesajı göster
+        alert(result.error || 'Bildirim okundu olarak işaretlenemedi.');
       }
     }
 
@@ -61,6 +173,28 @@ export default function NotificationBell({ notifications }: NotificationBellProp
       setLocalNotifications((prev) =>
         prev.map((n) => ({ ...n, is_read: true }))
       );
+    } else {
+      // Hata durumunda logla
+      console.error('handleMarkAllAsRead - markAllNotificationsAsRead failed:', result.error);
+      alert(result.error || 'Bildirimler okundu olarak işaretlenemedi.');
+    }
+  };
+
+  const handleDeleteNotification = async (e: React.MouseEvent, notificationId: string) => {
+    e.stopPropagation(); // Bildirime tıklama olayını engelle
+    
+    if (!window.confirm('Bu bildirimi silmek istediğinizden emin misiniz?')) {
+      return;
+    }
+
+    const result = await deleteNotification(notificationId);
+    if (result.success) {
+      setLocalNotifications((prev) =>
+        prev.filter((n) => n.id !== notificationId)
+      );
+    } else {
+      console.error('handleDeleteNotification - deleteNotification failed:', result.error);
+      alert(result.error || 'Bildirim silinemedi.');
     }
   };
 
@@ -133,11 +267,11 @@ export default function NotificationBell({ notifications }: NotificationBellProp
           ) : (
             <div className="divide-y">
               {localNotifications.map((notification) => (
-                <button
+                <div
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
                   className={cn(
-                    "w-full p-4 text-left hover:bg-accent transition-colors",
+                    "w-full p-4 text-left hover:bg-accent transition-colors relative group cursor-pointer",
                     !notification.is_read && "bg-primary/5"
                   )}
                 >
@@ -154,11 +288,20 @@ export default function NotificationBell({ notifications }: NotificationBellProp
                         {formatDate(notification.created_at)}
                       </p>
                     </div>
-                    {!notification.is_read && (
-                      <div className="h-2 w-2 bg-primary rounded-full shrink-0 mt-1" />
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!notification.is_read && (
+                        <div className="h-2 w-2 bg-primary rounded-full mt-1" />
+                      )}
+                      <button
+                        onClick={(e) => handleDeleteNotification(e, notification.id)}
+                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1 hover:bg-destructive/10 hover:text-destructive rounded"
+                        title="Bildirimi sil"
+                      >
+                        <X className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                      </button>
+                    </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}

@@ -1,6 +1,6 @@
 'use server'
 
-import { createClient, isAdmin } from '@/lib/supabase/server'
+import { createClient, isAdmin, createNotification } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -93,21 +93,45 @@ export async function deleteForumPost(id: string) {
 }
 
 /**
- * Forum yorumunu silme (Sadece admin)
+ * Forum yorumunu silme (Admin veya yorum sahibi)
  * @param id - Yorum ID'si
  * @returns Başarı durumu
  */
 export async function deleteComment(id: string) {
   try {
-    // Admin kontrolü
-    const adminCheck = await isAdmin()
-    if (!adminCheck) {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
       return {
-        error: 'Bu işlem için admin yetkisi gereklidir.',
+        error: 'Giriş yapmanız gerekiyor.',
       }
     }
 
-    const supabase = await createClient()
+    // Yorumu getir
+    const { data: comment, error: fetchError } = await supabase
+      .from('forum_comments')
+      .select('user_id')
+      .eq('id', id)
+      .single()
+
+    if (fetchError || !comment) {
+      return {
+        error: 'Yorum bulunamadı.',
+      }
+    }
+
+    // Yetki kontrolü: Admin veya yorum sahibi
+    const adminCheck = await isAdmin()
+    const isOwner = comment.user_id === user.id
+
+    if (!adminCheck && !isOwner) {
+      return {
+        error: 'Bu işlem için yetkiniz yok. Sadece yorum sahibi veya admin bu işlemi yapabilir.',
+      }
+    }
 
     // Yorumu sil
     const { error } = await supabase
@@ -117,6 +141,21 @@ export async function deleteComment(id: string) {
 
     if (error) {
       throw error
+    }
+
+    // Moderasyon bildirimi: Eğer silen kişi Admin ise VE yorumun sahibi kendisi değilse -> Bildirim gönder
+    if (adminCheck && comment.user_id !== user.id) {
+      await createNotification({
+        userId: comment.user_id, // Yorum sahibine
+        type: "system", // İkon seçimi için system kullanıyoruz
+        message: "Bir yorumunuz topluluk kurallarına uymadığı için yönetici tarafından kaldırıldı.",
+        link: "/forum", // Kullanıcıyı genel forum sayfasına yönlendiriyoruz
+        metadata: {
+          comment_id: id,
+          deleted_by: user.id,
+          action: "comment_deleted_by_admin",
+        },
+      })
     }
 
     revalidatePath('/forum/*')

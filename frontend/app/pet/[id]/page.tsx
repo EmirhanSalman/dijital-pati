@@ -3,7 +3,6 @@
 import { useState, useEffect, use } from "react";
 import { ethers } from "ethers";
 import {
-  Phone,
   CheckCircle,
   AlertTriangle,
   Loader2,
@@ -11,10 +10,10 @@ import {
   QrCode,
   Shield,
   ExternalLink,
-  Mail,
 } from "lucide-react";
 import PetFoundButton from "@/components/PetFoundButton";
 import PetQrCard from "@/components/PetQrCard";
+import ContactOwnerModal from "@/components/ContactOwnerModal";
 import DigitalPatiABI from "@/utils/DigitalPatiABI.json";
 import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +33,8 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   const [ownerAddress, setOwnerAddress] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [currentUserAddress, setCurrentUserAddress] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
@@ -45,11 +46,22 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   }, [id]);
 
   useEffect(() => {
-    // Re-check owner status when currentUserAddress or ownerAddress changes
-    if (currentUserAddress && ownerAddress) {
+    // Re-check owner status when currentUserAddress, ownerAddress, currentUserId, or petData changes
+    if (petData) {
+      // Check by owner_id (more reliable)
+      if (currentUserId && petData.owner_id) {
+        setIsOwner(currentUserId === petData.owner_id);
+        return;
+      }
+      // Fallback to wallet address check
+      if (currentUserAddress && ownerAddress) {
+        setIsOwner(currentUserAddress === ownerAddress.toLowerCase());
+      }
+    } else if (currentUserAddress && ownerAddress) {
+      // If petData is not available yet, use wallet address check
       setIsOwner(currentUserAddress === ownerAddress.toLowerCase());
     }
-  }, [currentUserAddress, ownerAddress]);
+  }, [currentUserAddress, ownerAddress, currentUserId, petData]);
 
   const checkOwnerStatus = async () => {
     try {
@@ -59,14 +71,22 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       } = await supabase.auth.getUser();
 
       if (user) {
+        setCurrentUserId(user.id);
+        
         const { data: profile } = await supabase
           .from("profiles")
-          .select("wallet_address")
+          .select("wallet_address, role")
           .eq("id", user.id)
           .single();
 
-        if (profile?.wallet_address) {
-          setCurrentUserAddress(profile.wallet_address.toLowerCase());
+        if (profile) {
+          if (profile.wallet_address) {
+            setCurrentUserAddress(profile.wallet_address.toLowerCase());
+          }
+          // Check if user is admin
+          if (profile.role === "admin") {
+            setIsAdmin(true);
+          }
         }
       }
     } catch (err) {
@@ -86,11 +106,11 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
           setPetData(supabasePet);
           setOwnerAddress(supabasePet.owner_address);
           
-          // Check if current user is owner (wait for currentUserAddress to be set)
-          if (currentUserAddress && supabasePet.owner_address.toLowerCase() === currentUserAddress) {
-            setIsOwner(true);
-          } else if (currentUserAddress) {
-            setIsOwner(false);
+          // Check if current user is owner (by owner_id or wallet address)
+          if (currentUserId && supabasePet.owner_id) {
+            setIsOwner(currentUserId === supabasePet.owner_id);
+          } else if (currentUserAddress && supabasePet.owner_address) {
+            setIsOwner(currentUserAddress === supabasePet.owner_address.toLowerCase());
           }
 
           setLoading(false);
@@ -328,10 +348,12 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
                   </div>
                 )}
 
-                {/* Owner Actions */}
-                {isOwner && (
+                {/* Owner Actions - Admin veya Hayvan Sahibi görebilir */}
+                {(isOwner || isAdmin) && (
                   <div className="pt-4 border-t">
-                    <h3 className="font-semibold mb-4">Sahip Kontrolü</h3>
+                    <h3 className="font-semibold mb-4">
+                      {isAdmin && !isOwner ? "Yönetici Kontrolü" : "Sahip Kontrolü"}
+                    </h3>
                     <Button
                       variant={displayData.isLost ? "default" : "destructive"}
                       className={`w-full ${!displayData.isLost ? "bg-rose-500 hover:bg-rose-600" : ""}`}
@@ -357,8 +379,8 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
                     </Button>
                     <p className="text-xs text-muted-foreground mt-2">
                       {displayData.isLost
-                        ? "Pet'iniz bulunduğunda bu butona tıklayın."
-                        : "Pet'iniz kaybolduğunda bu butona tıklayın."}
+                        ? "Pet bulunduğunda bu butona tıklayın."
+                        : "Pet kaybolduğunda bu butona tıklayın."}
                     </p>
                   </div>
                 )}
@@ -379,42 +401,16 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
                       </p>
 
                       <div className="space-y-2">
-                        {/* Phone Button */}
-                        {displayData.phone && (
-                          <a
-                            href={`tel:${displayData.phone}`}
-                            className="bg-rose-500 text-white w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-rose-600 transition"
-                          >
-                            <Phone className="h-5 w-5" /> Ara: {displayData.phone}
-                          </a>
-                        )}
-                        
-                        {/* Email Button */}
-                        {displayData.email && (
-                          <a
-                            href={`mailto:${displayData.email}`}
-                            className="bg-blue-500 text-white w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-600 transition"
-                          >
-                            <Mail className="h-5 w-5" /> Mail Gönder: {displayData.email}
-                          </a>
-                        )}
-                        
-                        {/* Fallback for old contact_info */}
-                        {!displayData.phone && !displayData.email && displayData.contact && (
-                          <a
-                            href={displayData.contact.includes("@") ? `mailto:${displayData.contact}` : `tel:${displayData.contact}`}
-                            className="bg-rose-500 text-white w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-rose-600 transition"
-                          >
-                            {displayData.contact.includes("@") ? (
-                              <>
-                                <Mail className="h-5 w-5" /> {displayData.contact}
-                              </>
-                            ) : (
-                              <>
-                                <Phone className="h-5 w-5" /> {displayData.contact}
-                              </>
-                            )}
-                          </a>
+                        {/* Contact Owner Modal */}
+                        {petData && (petData.contact_phone || petData.contact_email || petData.contact_info) && (
+                          <ContactOwnerModal
+                            pet={petData}
+                            trigger={
+                              <button className="bg-blue-500 text-white w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-600 transition">
+                                Sahibiyle İletişime Geç
+                              </button>
+                            }
+                          />
                         )}
                         
                         <PetFoundButton petId={id} ownerAddress={ownerAddress} />

@@ -92,6 +92,8 @@ export async function savePetToDatabase(data: {
   phone?: string | null
   email?: string | null
   contactInfo?: string // Backwards compatibility
+  city?: string | null
+  district?: string | null
 }) {
   try {
     const supabase = await createClient()
@@ -129,6 +131,14 @@ export async function savePetToDatabase(data: {
     // Fallback to contact_info for backwards compatibility
     if (data.contactInfo) {
       insertData.contact_info = data.contactInfo;
+    }
+
+    // Add location fields
+    if (data.city !== undefined && data.city !== null) {
+      insertData.city = data.city.trim();
+    }
+    if (data.district !== undefined && data.district !== null) {
+      insertData.district = data.district.trim();
     }
 
     const { error } = await supabase

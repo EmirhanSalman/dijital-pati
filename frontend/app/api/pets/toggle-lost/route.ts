@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { createNotification } from "@/lib/supabase/server";
 
 /**
  * UUID format kontrolü
@@ -91,21 +92,24 @@ export async function POST(request: NextRequest) {
 
     console.log("Pet bulundu:", { id: pet.id, token_id: pet.token_id, name: pet.name });
 
-    // Owner kontrolü
+    // Yetki kontrolü: Admin veya Pet Owner olmalı
     const { data: profile } = await supabase
       .from("profiles")
-      .select("wallet_address")
+      .select("wallet_address, role")
       .eq("id", user.id)
       .single();
 
     const userWalletAddress = profile?.wallet_address?.toLowerCase();
     const petOwnerId = pet.owner_id;
     const petOwnerAddress = pet.owner_address?.toLowerCase();
+    const isAdmin = profile?.role === "admin";
+    const isOwner = petOwnerId === user.id || petOwnerAddress === userWalletAddress;
 
-    if (petOwnerId !== user.id && petOwnerAddress !== userWalletAddress) {
-      console.error("Yetki hatası - User:", user.id, "Pet Owner:", petOwnerId);
+    // Admin veya Owner kontrolü
+    if (!isAdmin && !isOwner) {
+      console.error("Yetki hatası - User:", user.id, "Pet Owner:", petOwnerId, "Is Admin:", isAdmin, "Is Owner:", isOwner);
       return NextResponse.json(
-        { error: "Bu pet'e erişim yetkiniz yok." },
+        { error: "Bu işlem için yetkiniz yok. Sadece hayvan sahibi veya admin bu işlemi yapabilir." },
         { status: 403 }
       );
     }
@@ -125,6 +129,31 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("Durum başarıyla güncellendi:", { pet_id: pet.id, is_lost: isLost });
+
+    // Eğer kayıp ilanı oluşturulduysa (isLost = true) ve pet sahibi varsa bildirim gönder
+    if (isLost && petOwnerId) {
+      try {
+        const petName = pet.name && pet.name.trim() && !pet.name.startsWith("Pati #") 
+          ? pet.name 
+          : `Pati #${pet.token_id}`;
+        
+        await createNotification({
+          userId: petOwnerId,
+          type: "system",
+          message: `Kayıp ilanınız başarıyla oluşturuldu ve yayına alındı.`,
+          link: `/pet/${pet.token_id}`,
+          metadata: {
+            pet_id: pet.id,
+            token_id: pet.token_id,
+            pet_name: petName,
+            action: "lost_report_created"
+          }
+        });
+      } catch (notificationError) {
+        // Bildirim hatası işlemi durdurmaz, sadece logla
+        console.error("Bildirim oluşturma hatası:", notificationError);
+      }
+    }
 
     // Cache'i yenile
     revalidatePath(`/pet/${pet.token_id}`);

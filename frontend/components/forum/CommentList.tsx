@@ -1,5 +1,5 @@
 import { getComments } from "@/lib/supabase/server";
-import { isAdmin } from "@/lib/supabase/server";
+import { isAdmin, createClient } from "@/lib/supabase/server";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import DeleteButton from "./DeleteButton";
@@ -13,6 +13,13 @@ interface CommentListProps {
 export default async function CommentList({ postId }: CommentListProps) {
   const comments = await getComments(postId);
   const userIsAdmin = await isAdmin();
+  
+  // Mevcut kullanıcı ID'sini al
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const currentUserId = user?.id || null;
 
   // Tarihi formatla
   const formatDate = (dateString: string) => {
@@ -88,7 +95,7 @@ export default async function CommentList({ postId }: CommentListProps) {
                   </p>
                 </div>
               </div>
-              {userIsAdmin && (
+              {(userIsAdmin || comment.user_id === currentUserId) && (
                 <DeleteButton
                   id={comment.id}
                   type="comment"

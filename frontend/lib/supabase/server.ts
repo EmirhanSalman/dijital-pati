@@ -572,6 +572,42 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
   }
 }
 
+/**
+ * Bildirim oluşturur
+ */
+export async function createNotification(data: {
+  userId: string;
+  type: "reply" | "lost_pet_found" | "mention" | "system";
+  message: string;
+  link?: string | null;
+  metadata?: Record<string, any>;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+
+    const { error } = await supabase
+      .from("notifications")
+      .insert({
+        user_id: data.userId,
+        type: data.type,
+        message: data.message,
+        link: data.link || null,
+        metadata: data.metadata || {},
+        is_read: false,
+      });
+
+    if (error) {
+      console.error("createNotification error:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("createNotification error:", error);
+    return { success: false, error: error.message || "Bildirim oluşturulurken bir hata oluştu." };
+  }
+}
+
 export interface AdminStats {
   totalUsers: number;
   totalNews: number;
@@ -632,7 +668,10 @@ export interface Pet {
   contact_phone: string | null;
   contact_email: string | null;
   is_lost: boolean;
+  city: string | null;
+  district: string | null;
   created_at: string;
+  updated_at?: string | null;
 }
 
 /**
@@ -729,10 +768,15 @@ export async function togglePetLostStatus(tokenId: string, isLost: boolean): Pro
       return { success: false, error: "Pet bulunamadı." };
     }
 
-    // Owner kontrolü (owner_id veya owner_address ile)
+    // Yetki kontrolü: Admin veya Pet Owner olmalı
     const profile = await getUserProfile();
-    if (pet.owner_id !== user.id && pet.owner_address.toLowerCase() !== profile?.wallet_address?.toLowerCase()) {
-      return { success: false, error: "Bu pet'e erişim yetkiniz yok." };
+    const isAdmin = profile?.role === "admin";
+    const isOwner = pet.owner_id === user.id || 
+                    (pet.owner_address && profile?.wallet_address && 
+                     pet.owner_address.toLowerCase() === profile.wallet_address.toLowerCase());
+
+    if (!isAdmin && !isOwner) {
+      return { success: false, error: "Bu işlem için yetkiniz yok. Sadece hayvan sahibi veya admin bu işlemi yapabilir." };
     }
 
     const { error } = await supabase
@@ -743,6 +787,31 @@ export async function togglePetLostStatus(tokenId: string, isLost: boolean): Pro
     if (error) {
       console.error("togglePetLostStatus error:", error);
       return { success: false, error: error.message };
+    }
+
+    // Eğer kayıp ilanı oluşturulduysa (isLost = true) ve pet sahibi varsa bildirim gönder
+    if (isLost && pet.owner_id) {
+      try {
+        const petName = pet.name && pet.name.trim() && !pet.name.startsWith("Pati #") 
+          ? pet.name 
+          : `Pati #${pet.token_id}`;
+        
+        await createNotification({
+          userId: pet.owner_id,
+          type: "system",
+          message: `Kayıp ilanınız başarıyla oluşturuldu ve yayına alındı.`,
+          link: `/pet/${pet.token_id}`,
+          metadata: {
+            pet_id: pet.id,
+            token_id: pet.token_id,
+            pet_name: petName,
+            action: "lost_report_created"
+          }
+        });
+      } catch (notificationError) {
+        // Bildirim hatası işlemi durdurmaz, sadece logla
+        console.error("Bildirim oluşturma hatası:", notificationError);
+      }
     }
 
     return { success: true };
