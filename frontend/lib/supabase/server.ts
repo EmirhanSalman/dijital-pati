@@ -711,19 +711,37 @@ function isUUID(str: string): boolean {
 }
 
 /**
- * Pet'leri filtrelerle getirir
+ * Pet'leri filtrelerle getirir (sayfalama ile)
  * @param filters - Filtreleme parametreleri
- * @returns Pet listesi
+ * @param page - Sayfa numarası (default: 1)
+ * @param limit - Sayfa başına kayıt sayısı (default: 12)
+ * @returns Pet listesi ve toplam kayıt sayısı
  */
-export async function getPets(filters?: {
-  query?: string;
-  type?: string;
-  city?: string;
-  sort?: string;
-}): Promise<Pet[]> {
+export async function getPets(
+  filters?: {
+    query?: string;
+    type?: string;
+    city?: string;
+    sort?: string;
+    isLost?: boolean;
+  },
+  page: number = 1,
+  limit: number = 12
+): Promise<{ pets: Pet[]; count: number }> {
   try {
     const supabase = await createClient();
-    let query = supabase.from("pets").select("*");
+    
+    // Sayfalama hesaplamaları
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    // Count ile birlikte sorgu oluştur
+    let query = supabase.from("pets").select("*", { count: "exact" });
+
+    // Kayıp hayvan filtresi
+    if (filters?.isLost !== undefined) {
+      query = query.eq("is_lost", filters.isLost);
+    }
 
     // Arama sorgusu (isim veya açıklama)
     if (filters?.query && filters.query.trim()) {
@@ -753,20 +771,26 @@ export async function getPets(filters?: {
         .order("created_at", { ascending: false });
     }
 
-    const { data, error } = await query;
+    // Sayfalama uygula
+    query = query.range(from, to);
+
+    const { data, error, count } = await query;
 
     if (error) {
       console.error("getPets error:", error);
       if (error.code === "42P01") {
-        return [];
+        return { pets: [], count: 0 };
       }
-      return [];
+      return { pets: [], count: 0 };
     }
 
-    return data || [];
+    return {
+      pets: data || [],
+      count: count || 0,
+    };
   } catch (error) {
     console.error("getPets unexpected error:", error);
-    return [];
+    return { pets: [], count: 0 };
   }
 }
 

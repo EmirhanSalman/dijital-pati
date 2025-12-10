@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import PetCard from "@/components/PetCard";
 import FilterBar from "@/components/pets/FilterBar";
+import PaginationControls from "@/components/ui/PaginationControls";
 import { Suspense } from "react";
 import { getPets } from "@/lib/supabase/server";
 import type { Pet } from "@/lib/supabase/server";
@@ -14,19 +15,28 @@ interface PetsPageProps {
     type?: string;
     city?: string;
     sort?: string;
+    page?: string;
   }>;
 }
 
 export default async function PetsPage({ searchParams }: PetsPageProps) {
   const params = await searchParams;
 
-  // Filtrelenmiş pet'leri getir
-  const pets = await getPets({
-    query: params.query,
-    type: params.type,
-    city: params.city,
-    sort: params.sort || "newest",
-  });
+  // Sayfa numarasını al (varsayılan: 1)
+  const currentPage = params.page ? parseInt(params.page, 10) : 1;
+  const limit = 12;
+
+  // Filtrelenmiş pet'leri getir (sayfalama ile)
+  const { pets, count } = await getPets(
+    {
+      query: params.query,
+      type: params.type,
+      city: params.city,
+      sort: params.sort || "newest",
+    },
+    currentPage,
+    limit
+  );
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12">
@@ -40,9 +50,9 @@ export default async function PetsPage({ searchParams }: PetsPageProps) {
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Platformdaki tüm evcil hayvanları keşfedin, arayın ve filtreleyin.
           </p>
-          {pets.length > 0 && (
+          {count > 0 && (
             <Badge variant="default" className="mt-4 text-lg px-4 py-2">
-              {pets.length} Evcil Hayvan
+              {count} Evcil Hayvan
             </Badge>
           )}
         </div>
@@ -70,11 +80,22 @@ export default async function PetsPage({ searchParams }: PetsPageProps) {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {pets.map((pet) => (
-              <PetCard key={pet.id || pet.token_id} pet={pet} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {pets.map((pet) => (
+                <PetCard key={pet.id || pet.token_id} pet={pet} />
+              ))}
+            </div>
+
+            {/* Sayfalama Kontrolleri */}
+            {count > 0 && (
+              <PaginationControls
+                totalCount={count}
+                currentPage={currentPage}
+                perPage={limit}
+              />
+            )}
+          </>
         )}
 
         {/* Alt Bilgi */}

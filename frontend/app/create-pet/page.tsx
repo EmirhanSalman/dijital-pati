@@ -17,8 +17,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import DigitalPatiABI from "@/utils/DigitalPatiABI.json";
+import { CITIES as ALL_CITIES } from "@/constants/cities";
+
+// Pet türleri (FilterBar ile aynı)
+const PET_TYPES = [
+  { value: "Kedi", label: "Kedi" },
+  { value: "Köpek", label: "Köpek" },
+  { value: "Kuş", label: "Kuş" },
+  { value: "Diğer", label: "Diğer" },
+];
+
+// Şehirler (merkezi listeden, "all" hariç - create-pet sayfasında "Tümü" seçeneği yok)
+const CITIES = ALL_CITIES.map((city: string) => ({ value: city, label: city }));
 
 // TODO: Replace with actual contract address
 const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
@@ -484,18 +503,26 @@ export default function CreatePetPage() {
                 {/* Breed */}
                 <div>
                   <Label htmlFor="breed" className="text-white">
-                    Tür/Irk *
+                    Tür *
                   </Label>
-                  <Input
-                    id="breed"
+                  <Select
                     value={formData.breed}
-                    onChange={(e) =>
-                      setFormData({ ...formData, breed: e.target.value })
+                    onValueChange={(value) =>
+                      setFormData({ ...formData, breed: value })
                     }
-                    className="bg-slate-900/50 border-white/10 text-white mt-2"
-                    placeholder="Örn: Golden Retriever, British Shorthair..."
                     required
-                  />
+                  >
+                    <SelectTrigger className="bg-slate-900/50 border-white/10 text-white mt-2">
+                      <SelectValue placeholder="Tür seçiniz" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PET_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Description */}
@@ -569,15 +596,23 @@ export default function CreatePetPage() {
                     <Label htmlFor="city" className="text-white">
                       İl
                     </Label>
-                    <Input
-                      id="city"
+                    <Select
                       value={formData.city}
-                      onChange={(e) =>
-                        setFormData({ ...formData, city: e.target.value })
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, city: value })
                       }
-                      className="bg-slate-900/50 border-white/10 text-white mt-2"
-                      placeholder="Örn: İstanbul, Ankara..."
-                    />
+                    >
+                      <SelectTrigger className="bg-slate-900/50 border-white/10 text-white mt-2">
+                        <SelectValue placeholder="Şehir seçiniz" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CITIES.map((city) => (
+                          <SelectItem key={city.value} value={city.value}>
+                            {city.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <p className="text-xs text-slate-500 mt-1">
                       Kaybolma durumunda arama yapılacak şehir
                     </p>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, useCallback, useTransition } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -11,9 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Filter, X } from "lucide-react";
+import { Search, Filter, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useDebounce } from "@/hooks/useDebounce";
+import { CITIES as ALL_CITIES } from "@/constants/cities";
 
 // Tür seçenekleri
 const PET_TYPES = [
@@ -24,19 +24,10 @@ const PET_TYPES = [
   { value: "Diğer", label: "Diğer" },
 ];
 
-// Şehir seçenekleri
+// Şehir seçenekleri (merkezi listeden, "Tümü" seçeneği ile)
 const CITIES = [
   { value: "all", label: "Tümü" },
-  { value: "İstanbul", label: "İstanbul" },
-  { value: "Ankara", label: "Ankara" },
-  { value: "İzmir", label: "İzmir" },
-  { value: "Bursa", label: "Bursa" },
-  { value: "Antalya", label: "Antalya" },
-  { value: "Adana", label: "Adana" },
-  { value: "Gaziantep", label: "Gaziantep" },
-  { value: "Konya", label: "Konya" },
-  { value: "Kayseri", label: "Kayseri" },
-  { value: "Mersin", label: "Mersin" },
+  ...ALL_CITIES.map((city) => ({ value: city, label: city })),
 ];
 
 // Sıralama seçenekleri
@@ -48,19 +39,20 @@ const SORT_OPTIONS = [
 export default function FilterBar() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
 
   // URL'den mevcut değerleri al
-  const [query, setQuery] = useState(searchParams.get("query") || "");
+  const initialQuery = searchParams.get("query") || "";
+  const [localQuery, setLocalQuery] = useState(initialQuery); // Local state for input
   const [type, setType] = useState(searchParams.get("type") || "all");
   const [city, setCity] = useState(searchParams.get("city") || "all");
   const [sort, setSort] = useState(searchParams.get("sort") || "newest");
 
-  // Debounced query (500ms)
-  const debouncedQuery = useDebounce(query, 500);
-
   // URL parametreleri değiştiğinde state'i güncelle (ör: geri/ileri butonları)
   useEffect(() => {
-    setQuery(searchParams.get("query") || "");
+    const urlQuery = searchParams.get("query") || "";
+    setLocalQuery(urlQuery); // URL'den gelen değeri local state'e senkronize et
     setType(searchParams.get("type") || "all");
     setCity(searchParams.get("city") || "all");
     setSort(searchParams.get("sort") || "newest");
@@ -108,28 +100,37 @@ export default function FilterBar() {
       }
 
       // URL'i güncelle (replace kullan ki geçmiş kirlenmesin)
-      router.replace(`/pets?${params.toString()}`);
+      // Mevcut pathname'i kullan (pets veya lost-pets)
+      // scroll: false ile sayfa zıplamasını önle
+      // useTransition ile UI blocking'i önle
+      startTransition(() => {
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      });
     },
-    [router, searchParams]
+    [router, searchParams, pathname, startTransition]
   );
 
-  // Debounced query değiştiğinde URL'i güncelle
-  useEffect(() => {
-    updateURL({ query: debouncedQuery });
-  }, [debouncedQuery, updateURL]);
+  // Manuel arama fonksiyonu (buton veya Enter tuşu ile tetiklenir)
+  const handleSearch = useCallback(() => {
+    startTransition(() => {
+      updateURL({ query: localQuery });
+    });
+  }, [localQuery, updateURL, startTransition]);
 
   // Filtreleri temizle
   const handleClearFilters = () => {
-    setQuery("");
+    setLocalQuery(""); // Local query state'ini de sıfırla
     setType("all");
     setCity("all");
     setSort("newest");
-    router.replace("/pets");
+    startTransition(() => {
+      router.replace(pathname, { scroll: false });
+    });
   };
 
   // Aktif filtre var mı kontrol et
   const hasActiveFilters =
-    query.trim() !== "" || type !== "all" || city !== "all" || sort !== "newest";
+    localQuery.trim() !== "" || type !== "all" || city !== "all" || sort !== "newest";
 
   return (
     <Card className="border-2 mb-8">
@@ -139,24 +140,13 @@ export default function FilterBar() {
           <h3 className="font-semibold text-lg">Filtrele ve Ara</h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Arama Input'u */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="İsim veya açıklama ara..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
+        <div className="flex flex-wrap gap-4">
           {/* Tür Select */}
           <Select value={type} onValueChange={(value) => {
             setType(value);
             updateURL({ type: value });
           }}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Tür Seçiniz" />
             </SelectTrigger>
             <SelectContent>
@@ -173,7 +163,7 @@ export default function FilterBar() {
             setCity(value);
             updateURL({ city: value });
           }}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Şehir Seçiniz" />
             </SelectTrigger>
             <SelectContent>
@@ -190,7 +180,7 @@ export default function FilterBar() {
             setSort(value);
             updateURL({ sort: value });
           }}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Sırala" />
             </SelectTrigger>
             <SelectContent>
@@ -201,6 +191,36 @@ export default function FilterBar() {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Arama Input'u ve Butonu - En sağda, flex-1 ile genişliyor */}
+          <div className="flex gap-2 flex-1 min-w-[200px] w-full sm:w-auto">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="İsim veya açıklama ara..."
+                value={localQuery}
+                onChange={(e) => setLocalQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
+                className="pl-10"
+              />
+            </div>
+            <Button
+              onClick={handleSearch}
+              disabled={isPending}
+              className="shrink-0"
+            >
+              {isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              <span className="ml-2 hidden sm:inline">Ara</span>
+            </Button>
+          </div>
         </div>
 
         {/* Filtreleri Temizle Butonu */}
