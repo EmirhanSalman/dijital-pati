@@ -1,18 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertCircle, PawPrint, CheckCircle, AlertTriangle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, AlertCircle, PawPrint, CheckCircle, AlertTriangle, QrCode, Download } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function ProfilePetsTab() {
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const qrCodeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchUserPets();
@@ -61,6 +72,73 @@ export default function ProfilePetsTab() {
       setError(err.message || "Petler yüklenirken bir hata oluştu.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadQR = () => {
+    if (!qrCodeRef.current || !selectedPet) return;
+
+    try {
+      // SVG elementini bul
+      const svgElement = qrCodeRef.current.querySelector('svg');
+      if (!svgElement) {
+        console.error('QR kod SVG elementi bulunamadı');
+        return;
+      }
+
+      // SVG'yi string'e çevir
+      const svgData = new XMLSerializer().serializeToString(svgElement);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      // Canvas oluştur ve SVG'yi çiz
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new window.Image();
+
+      img.onload = () => {
+        // Canvas boyutunu ayarla (yüksek kalite için 2x)
+        canvas.width = img.width * 2;
+        canvas.height = img.height * 2;
+        
+        if (ctx) {
+          // Yüksek kalite için scale
+          ctx.scale(2, 2);
+          ctx.drawImage(img, 0, 0);
+          
+          // PNG olarak indir
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              
+              // Pet adını dosya adı olarak kullan
+              const petName = selectedPet.name && selectedPet.name.trim() && !selectedPet.name.startsWith("Pati #")
+                ? selectedPet.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+                : `pati_${selectedPet.token_id}`;
+              
+              link.download = `qr_kod_${petName}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+            }
+          }, 'image/png');
+        }
+        
+        URL.revokeObjectURL(svgUrl);
+      };
+
+      img.onerror = () => {
+        console.error('QR kod görüntüsü yüklenemedi');
+        URL.revokeObjectURL(svgUrl);
+      };
+
+      img.src = svgUrl;
+    } catch (error) {
+      console.error('QR kod indirme hatası:', error);
+      alert('QR kod indirilemedi. Lütfen tekrar deneyin.');
     }
   };
 
@@ -164,14 +242,78 @@ export default function ProfilePetsTab() {
                   {pet.breed && <span className="font-medium">Tür: {pet.breed}</span>}
                 </p>
                 <p className="text-xs text-muted-foreground mb-4">ID: #{pet.token_id}</p>
-                <Button variant="outline" className="w-full" asChild>
-                  <Link href={`/pet/${pet.token_id}`}>Detayları Gör</Link>
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1" 
+                    onClick={() => {
+                      setSelectedPet(pet);
+                      setIsQrModalOpen(true);
+                    }}
+                  >
+                    <QrCode className="h-4 w-4 mr-2" />
+                    QR Kod
+                  </Button>
+                  <Button variant="outline" className="flex-1" asChild>
+                    <Link href={`/pet/${pet.token_id}`}>Detayları Gör</Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      {/* QR Kod Modal */}
+      <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>QR Kod</DialogTitle>
+            <DialogDescription>
+              {selectedPet && (
+                <>
+                  {selectedPet.name && selectedPet.name.trim() && !selectedPet.name.startsWith("Pati #")
+                    ? selectedPet.name
+                    : `Pati #${selectedPet.token_id}`} için QR kod
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedPet && (
+            <div className="space-y-4">
+              <div 
+                ref={qrCodeRef}
+                className="flex flex-col items-center justify-center p-6 bg-white rounded-lg border-2 border-gray-200"
+              >
+                <QRCodeSVG
+                  value={
+                    typeof window !== "undefined"
+                      ? `${window.location.origin}/pet/${selectedPet.token_id}`
+                      : `https://dijitalpati.com/pet/${selectedPet.token_id}`
+                  }
+                  size={256}
+                  level="H"
+                  includeMargin={true}
+                  bgColor="#FFFFFF"
+                  fgColor="#000000"
+                />
+                <p className="text-xs text-muted-foreground mt-4 text-center max-w-xs">
+                  Bu QR kodu tarayarak pet detay sayfasına erişilebilir
+                </p>
+              </div>
+
+              <Button
+                className="w-full"
+                onClick={handleDownloadQR}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                QR Kodu İndir (PNG)
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
