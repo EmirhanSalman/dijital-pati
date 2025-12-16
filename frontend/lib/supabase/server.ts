@@ -170,6 +170,9 @@ export interface ForumPost {
   category: string | null;
   created_at: string;
   updated_at: string;
+  author_avatar_url?: string | null;
+  author_full_name?: string | null;
+  author_username?: string | null;
   profiles?: {
     username: string | null;
     avatar_url: string | null;
@@ -282,10 +285,14 @@ export async function getForumPostBySlug(slug: string): Promise<ForumPost | null
     const score = votes.reduce((acc: number, curr: any) => acc + (curr.vote_type || 0), 0);
     const userVote = user ? votes.find((v: any) => v.user_id === user.id)?.vote_type || 0 : 0;
 
-    const { forum_votes, ...postWithoutVotes } = data;
+    const { forum_votes, profiles, ...postWithoutVotes } = data;
 
     return {
       ...postWithoutVotes,
+      author_avatar_url: profiles?.avatar_url || null,
+      author_full_name: profiles?.full_name || null,
+      author_username: profiles?.username || null,
+      profiles: profiles || undefined,
       score,
       user_vote: userVote,
     };
