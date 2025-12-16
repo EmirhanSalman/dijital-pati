@@ -51,7 +51,7 @@ export default function ForumFilters() {
     router.push(`/forum?${params.toString()}`);
   };
 
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
