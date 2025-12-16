@@ -1,6 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createNotification } from '@/lib/supabase/server'
 
 /**
@@ -15,6 +16,21 @@ export async function sendContactEmail(data: {
   message: string
   location: { lat: number; lng: number } | null
 }) {
+  // DEBUG: Environment variables kontrolü
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  
+  console.log('🔍 [DEBUG] Environment Variables Kontrolü:', {
+    hasSupabaseUrl: !!supabaseUrl,
+    supabaseUrlLength: supabaseUrl?.length || 0,
+    hasServiceRoleKey: !!supabaseServiceRoleKey,
+    serviceRoleKeyLength: supabaseServiceRoleKey?.length || 0,
+    serviceRoleKeyPrefix: supabaseServiceRoleKey ? `${supabaseServiceRoleKey.substring(0, 10)}...` : 'undefined',
+    allEnvKeys: Object.keys(process.env).filter(key => 
+      key.includes('SUPABASE') || key.includes('NEXT_PUBLIC')
+    ),
+  })
+
   try {
     const { petId, petName, ownerEmail, finderName, finderPhone, message, location } = data
 
@@ -91,38 +107,196 @@ Bu mesaj DijitalPati platformu üzerinden gönderilmiştir.
       })
     }
 
-    // Site içi bildirim oluştur
+    // Veritabanına mesaj kaydet ve bildirim oluştur
     try {
-      const supabase = await createClient()
+      // Normal client ile pet bilgilerini al (SELECT için RLS var)
+      const supabase = await createServerClient()
       
-      // Pet'in owner_id'sini bul
+      // Pet'in id ve owner_id'sini bul
       const { data: petData, error: petError } = await supabase
         .from('pets')
-        .select('owner_id')
+        .select('id, owner_id')
         .eq('token_id', petId)
         .single()
 
-      if (!petError && petData && petData.owner_id) {
-        // Mesajın ilk 20 karakterini al
-        const messagePreview = message.length > 20 
-          ? message.substring(0, 20) + '...' 
-          : message
+      if (petError) {
+        console.error('Supabase Hatası (Pet Bulunamadı):', {
+          error: petError,
+          code: petError.code,
+          message: petError.message,
+          details: petError.details,
+          hint: petError.hint,
+          petId: petId,
+        })
+        return {
+          error: 'Pet bilgisi bulunamadı. Lütfen tekrar deneyin.',
+        }
+      }
 
-        // Bildirim oluştur
-        await createNotification({
-          userId: petData.owner_id,
-          type: 'contact_request',
-          message: `Biri ${petName} ilanı için size mesaj gönderdi: ${messagePreview}`,
-          link: `/pet/${petId}`,
-          metadata: {
-            pet_id: petId,
-            pet_name: petName,
-            finder_name: finderName,
-            finder_phone: finderPhone,
-            message_preview: messagePreview,
+      if (!petData) {
+        console.error('Pet verisi bulunamadı:', { petId })
+        return {
+          error: 'Pet bilgisi bulunamadı. Lütfen tekrar deneyin.',
+        }
+      }
+
+      // Owner ID kontrolü
+      if (!petData.owner_id) {
+        console.error('Owner ID bulunamadı:', { petData, petId })
+        return {
+          error: 'Pet sahibi bilgisi bulunamadı. Lütfen tekrar deneyin.',
+        }
+      }
+
+      // Owner ID'nin UUID formatında olduğunu kontrol et
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (!uuidRegex.test(petData.owner_id)) {
+        console.error('Owner ID geçersiz UUID formatı:', {
+          owner_id: petData.owner_id,
+          petId: petId,
+          petData: petData,
+        })
+        return {
+          error: 'Pet sahibi bilgisi geçersiz. Lütfen tekrar deneyin.',
+        }
+      }
+
+      // Pet ID kontrolü
+      if (!petData.id) {
+        console.error('Pet ID bulunamadı:', { petData, petId })
+        return {
+          error: 'Pet ID bulunamadı. Lütfen tekrar deneyin.',
+        }
+      }
+
+      console.log('Pet bilgileri alındı:', {
+        pet_id: petData.id,
+        owner_id: petData.owner_id,
+        pet_id_type: typeof petData.id,
+        owner_id_type: typeof petData.owner_id,
+      })
+
+      // Service Role Key ile admin client oluştur (RLS bypass için)
+      // Not: Environment variables fonksiyonun başında kontrol edildi
+      if (!supabaseUrl || !supabaseServiceRoleKey) {
+        console.error('❌ [HATA] Service Role Key veya Supabase URL bulunamadı:', {
+          supabaseUrl: supabaseUrl ? '✅ Var' : '❌ Yok',
+          supabaseServiceRoleKey: supabaseServiceRoleKey ? '✅ Var' : '❌ Yok',
+          envFileLocation: 'frontend/.env.local (package.json ile aynı dizinde olmalı)',
+          requiredVars: [
+            'NEXT_PUBLIC_SUPABASE_URL',
+            'SUPABASE_SERVICE_ROLE_KEY'
+          ],
+        })
+        return {
+          error: 'Sunucu yapılandırması eksik. Lütfen yöneticiye bildirin.',
+        }
+      }
+
+      // Tip kontrolü ve güvenlik
+      if (typeof supabaseUrl !== 'string' || supabaseUrl.trim() === '') {
+        console.error('❌ [HATA] Supabase URL geçersiz tip veya boş')
+        return {
+          error: 'Sunucu yapılandırması geçersiz. Lütfen yöneticiye bildirin.',
+        }
+      }
+
+      if (typeof supabaseServiceRoleKey !== 'string' || supabaseServiceRoleKey.trim() === '') {
+        console.error('❌ [HATA] Service Role Key geçersiz tip veya boş')
+        return {
+          error: 'Sunucu yapılandırması geçersiz. Lütfen yöneticiye bildirin.',
+        }
+      }
+
+      console.log('✅ [DEBUG] Admin client oluşturuluyor...')
+
+      // Admin client oluştur (RLS bypass)
+      const supabaseAdmin = createClient(supabaseUrl.trim(), supabaseServiceRoleKey.trim(), {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      })
+
+      console.log('✅ [DEBUG] Admin client başarıyla oluşturuldu')
+
+      // Mesajı veritabanına kaydet ve ID'sini al (Admin client ile - RLS bypass)
+      const { data: newMessage, error: messageError } = await supabaseAdmin
+        .from('contact_messages')
+        .insert({
+          pet_id: petData.id,
+          owner_id: petData.owner_id,
+          sender_name: finderName,
+          sender_phone: finderPhone,
+          sender_email: null, // İsteğe bağlı, şimdilik null
+          message: message,
+          location_latitude: location?.lat || null,
+          location_longitude: location?.lng || null,
+          location_link: locationLink || null,
+          is_read: false,
+        })
+        .select('id')
+        .single()
+
+      if (messageError) {
+        console.error('Supabase Hatası (Mesaj Kaydedilemedi):', {
+          error: messageError,
+          code: messageError.code,
+          message: messageError.message,
+          details: messageError.details,
+          hint: messageError.hint,
+          insertData: {
+            pet_id: petData.id,
+            owner_id: petData.owner_id,
+            sender_name: finderName,
+            sender_phone: finderPhone,
+            message_length: message.length,
+            has_location: !!location,
           },
         })
+        return {
+          error: 'Mesaj kaydedilemedi. Lütfen tekrar deneyin.',
+        }
       }
+
+      if (!newMessage || !newMessage.id) {
+        console.error('Mesaj ID alınamadı:', {
+          newMessage,
+          messageError,
+          petData,
+        })
+        return {
+          error: 'Mesaj kaydedilemedi. Lütfen tekrar deneyin.',
+        }
+      }
+
+      // Bildirim linkini mesaj detay sayfasına yönlendir
+      // Artık her zaman mesaj ID'si var, çünkü yukarıda kontrol ettik
+      const notificationLink = `/messages/${newMessage.id}`
+
+      // Pet adını belirle (fallback ile)
+      const displayPetName = petName && petName.trim() && !petName.startsWith('Pati #')
+        ? petName
+        : 'küçük dostumuz'
+
+      // Bildirim mesajı (UI'da formatlanacak ama burada da tutarlı bir mesaj bırakıyoruz)
+      const notificationMessage = `🐾 Müjde! Birisi ${displayPetName} dostumuzu buldu ve sizinle iletişime geçmek istiyor.`
+
+      // Bildirim oluştur
+      await createNotification({
+        userId: petData.owner_id,
+        type: 'contact_request',
+        message: notificationMessage,
+        link: notificationLink,
+        metadata: {
+          pet_id: petId,
+          pet_name: petName, // Orijinal pet adı (fallback olmadan)
+          display_pet_name: displayPetName, // Görüntüleme için formatlanmış ad
+          finder_name: finderName,
+          finder_phone: finderPhone,
+          message_id: newMessage.id,
+        },
+      })
     } catch (notificationError) {
       // Bildirim hatası e-postayı engellemez
       console.error('Bildirim oluşturma hatası:', notificationError)

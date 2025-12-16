@@ -27,7 +27,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   const [petData, setPetData] = useState<Pet | null>(null);
   const [blockchainData, setBlockchainData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [ownerAddress, setOwnerAddress] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [currentUserAddress, setCurrentUserAddress] = useState<string | null>(null);

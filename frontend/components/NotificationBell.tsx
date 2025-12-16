@@ -222,9 +222,46 @@ export default function NotificationBell({ notifications: initialNotifications }
         return '🐾';
       case 'mention':
         return '👤';
+      case 'contact_request':
+        return '🐾';
+      case 'location_alert':
+        return '📍';
       default:
         return '🔔';
     }
+  };
+
+  const formatNotificationMessage = (notification: Notification) => {
+    // contact_request tipindeki bildirimler için özel formatlama
+    if (notification.type === 'contact_request' && notification.metadata) {
+      // Önce display_pet_name, sonra pet_name, sonra pet_id, en son fallback
+      const petName = notification.metadata.display_pet_name || 
+                     notification.metadata.pet_name || 
+                     (notification.metadata.pet_id ? `Pati #${notification.metadata.pet_id}` : null) ||
+                     'küçük dostumuz';
+      
+      return (
+        <>
+          🐾 Müjde! Birisi <strong className="font-bold">{petName}</strong> dostumuzu buldu ve sizinle iletişime geçmek istiyor.
+        </>
+      );
+    }
+
+    // location_alert tipindeki bildirimler için özel formatlama
+    if (notification.type === 'location_alert' && notification.metadata) {
+      const petName = notification.metadata.pet_name || 
+                     (notification.metadata.pet_id ? `Pati #${notification.metadata.pet_id}` : null) ||
+                     'küçük dostumuz';
+      
+      return (
+        <>
+          🐾 DİKKAT! Biri <strong className="font-bold">{petName}</strong> ilanınız için konum bildirdi. Haritada görmek için tıklayın.
+        </>
+      );
+    }
+
+    // Diğer bildirimler için orijinal mesajı göster
+    return notification.message;
   };
 
   return (
@@ -282,7 +319,7 @@ export default function NotificationBell({ notifications: initialNotifications }
                         "text-sm",
                         !notification.is_read && "font-semibold"
                       )}>
-                        {notification.message}
+                        {formatNotificationMessage(notification)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {formatDate(notification.created_at)}
