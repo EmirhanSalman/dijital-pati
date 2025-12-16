@@ -6,12 +6,10 @@ import {
   CheckCircle,
   AlertTriangle,
   Loader2,
-  MapPin,
   QrCode,
   Shield,
   ExternalLink,
 } from "lucide-react";
-import PetFoundButton from "@/components/PetFoundButton";
 import PetQrCard from "@/components/PetQrCard";
 import ContactOwnerModal from "@/components/ContactOwnerModal";
 import DigitalPatiABI from "@/utils/DigitalPatiABI.json";
@@ -397,23 +395,24 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
                       </div>
                       <p className="text-red-700">
                         Bu evcil hayvan kaybolmuş durumda. Eğer bu hayvanı gördüyseniz, lütfen
-                        aşağıdaki butona tıklayarak konumunuzu paylaşın.
+                        aşağıdaki butona tıklayarak sahibiyle iletişime geçin.
                       </p>
 
-                      <div className="space-y-2">
+                      <div>
                         {/* Contact Owner Modal */}
                         {petData && (petData.contact_phone || petData.contact_email || petData.contact_info) && (
                           <ContactOwnerModal
                             pet={petData}
                             trigger={
-                              <button className="bg-blue-500 text-white w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-600 transition">
+                              <Button 
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg font-bold shadow-lg"
+                                size="lg"
+                              >
                                 Sahibiyle İletişime Geç
-                              </button>
+                              </Button>
                             }
                           />
                         )}
-                        
-                        <PetFoundButton petId={id} ownerAddress={ownerAddress} />
                       </div>
                     </div>
                   </div>

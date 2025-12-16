@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createNotification } from '@/lib/supabase/server'
 import { sendLostPetAlert } from '@/lib/mail'
 import { revalidatePath } from 'next/cache'
 
@@ -83,6 +84,81 @@ export async function reportFoundPet(
     console.error('reportFoundPet error:', error)
     return {
       error: error.message || 'Bildirim gönderilirken bir hata oluştu.',
+    }
+  }
+}
+
+/**
+ * Konum paylaşımı için bildirim gönderir (sadece bildirim, e-posta yok)
+ * @param petId - Hayvan NFT ID'si (tokenId)
+ * @param ownerId - Pet sahibinin user ID'si
+ * @param latitude - Konum enlemi
+ * @param longitude - Konum boylamı
+ * @returns Başarı durumu
+ */
+export async function shareLocation(
+  petId: string,
+  ownerId: string | null,
+  latitude: number,
+  longitude: number
+) {
+  try {
+    // Pet bilgisini al (pet adı için)
+    const supabase = await createClient()
+    const { data: petData } = await supabase
+      .from('pets')
+      .select('name, token_id, owner_id')
+      .eq('token_id', petId)
+      .single()
+
+    // Eğer ownerId verilmemişse, pet'ten al
+    const finalOwnerId = ownerId || petData?.owner_id
+
+    if (!finalOwnerId) {
+      return {
+        error: 'Hayvan sahibi bulunamadı.',
+      }
+    }
+
+    // Pet adını belirle
+    const petName = petData?.name && petData.name.trim() && !petData.name.startsWith('Pati #')
+      ? petData.name
+      : `Pati #${petId}`
+
+    // Google Maps linki oluştur
+    const locationLink = `https://www.google.com/maps?q=${latitude},${longitude}`
+
+    // Bildirim oluştur
+    const notificationResult = await createNotification({
+      userId: finalOwnerId,
+      type: 'location_alert',
+      message: `DİKKAT! Biri ${petName} ilanınız için konum bildirdi. Haritada görmek için tıklayın.`,
+      link: locationLink,
+      metadata: {
+        pet_id: petId,
+        pet_name: petName,
+        latitude,
+        longitude,
+        location_link: locationLink,
+      },
+    })
+
+    if (!notificationResult.success) {
+      return {
+        error: notificationResult.error || 'Bildirim oluşturulamadı.',
+      }
+    }
+
+    revalidatePath(`/pet/${petId}`)
+
+    return {
+      success: true,
+      message: 'Konum başarıyla sahibine iletildi.',
+    }
+  } catch (error: any) {
+    console.error('shareLocation error:', error)
+    return {
+      error: error.message || 'Konum paylaşılırken bir hata oluştu.',
     }
   }
 }

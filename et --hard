@@ -1,0 +1,11 @@
+[33mad454e1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Refactor: Sehir listesi merkezilestirildi (81 il), create-pet ve filterbar senkronize edildi
+[33mf911712[m Feat: Gelismis arama ve filtreleme modulu eklendi (FilterBar + URL Params + Supabase Query)
+[33m8504911[m Feat: Bildirim sistemi, Admin yetkileri ve UI/UX iyileştirmeleri tamamlandı
+[33mf705702[m fix: PROFILE LIST FIXED � - Switched to owner_id fetching logic, solved empty list issue. PROJECT COMPLETE.
+[33m4715923[m feat: PROJECT V1 COMPLETED  - All modules (Blockchain, Forum, Lost Alert, Admin) are fully functional.
+[33m3345c1f[m feat: FINAL MVP - QR Code, Public Page and error handling completed. System operational.
+[33mf8549a0[m fix: Fetch logic updated, minting works
+[33mf4145e9[m feat: Gallery implementation, fetching logic and UI components added
+[33m9953c8d[m refactor: Convert backend from submodule to normal directory
+[33mc704373[m feat: Complete blockchain integration - Add NFT minting with IPFS metadata
+[33mddb4290[m FEAT: Ucretli Kayip Bildirimi (Solidity), Otomatik Kullanici Paneli ve QR Kod ozellikleri eklendi.

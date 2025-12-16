@@ -1,5 +1,8 @@
 'use server'
 
+import { createClient } from '@/lib/supabase/server'
+import { createNotification } from '@/lib/supabase/server'
+
 /**
  * Hayvan sahibine iletişim mesajı gönderir
  */
@@ -86,6 +89,43 @@ Bu mesaj DijitalPati platformu üzerinden gönderilmiştir.
         subject: emailSubject,
         body: emailBody,
       })
+    }
+
+    // Site içi bildirim oluştur
+    try {
+      const supabase = await createClient()
+      
+      // Pet'in owner_id'sini bul
+      const { data: petData, error: petError } = await supabase
+        .from('pets')
+        .select('owner_id')
+        .eq('token_id', petId)
+        .single()
+
+      if (!petError && petData && petData.owner_id) {
+        // Mesajın ilk 20 karakterini al
+        const messagePreview = message.length > 20 
+          ? message.substring(0, 20) + '...' 
+          : message
+
+        // Bildirim oluştur
+        await createNotification({
+          userId: petData.owner_id,
+          type: 'contact_request',
+          message: `Biri ${petName} ilanı için size mesaj gönderdi: ${messagePreview}`,
+          link: `/pet/${petId}`,
+          metadata: {
+            pet_id: petId,
+            pet_name: petName,
+            finder_name: finderName,
+            finder_phone: finderPhone,
+            message_preview: messagePreview,
+          },
+        })
+      }
+    } catch (notificationError) {
+      // Bildirim hatası e-postayı engellemez
+      console.error('Bildirim oluşturma hatası:', notificationError)
     }
 
     return {

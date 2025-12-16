@@ -50,7 +50,7 @@ export default function PetQrCard({
       >
         {/* Front Side */}
         <motion.div
-          className="absolute inset-0 backface-hidden rounded-2xl overflow-hidden shadow-lg bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-gray-200"
+          className="absolute inset-0 backface-hidden rounded-2xl overflow-hidden shadow-lg bg-white border-2 border-gray-200"
           style={{
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",

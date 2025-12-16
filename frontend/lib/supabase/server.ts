@@ -577,7 +577,7 @@ export async function markNotificationAsRead(notificationId: string): Promise<bo
  */
 export async function createNotification(data: {
   userId: string;
-  type: "reply" | "lost_pet_found" | "mention" | "system";
+  type: "reply" | "lost_pet_found" | "mention" | "system" | "contact_request" | "location_alert";
   message: string;
   link?: string | null;
   metadata?: Record<string, any>;
