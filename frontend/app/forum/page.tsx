@@ -122,7 +122,7 @@ export default async function ForumPage({ searchParams }: ForumPageProps) {
                               <AvatarImage src={post.author_avatar_url} />
                             )}
                             <AvatarFallback className="text-xs">
-                              {getUserInitials(post.author_full_name, post.author_username)}
+                              {getUserInitials(post.author_full_name ?? null, post.author_username ?? null)}
                             </AvatarFallback>
                           </Avatar>
                           <span>

@@ -73,8 +73,8 @@ export default async function CommentList({ postId }: CommentListProps) {
                     )}
                     <AvatarFallback className="text-xs">
                       {getUserInitials(
-                        comment.author_full_name,
-                        comment.author_username
+                        comment.author_full_name ?? null,
+                        comment.author_username ?? null
                       )}
                     </AvatarFallback>
                   </Avatar>
