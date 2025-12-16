@@ -114,7 +114,7 @@ export default async function ForumPostDetailPage({ params }: ForumPostDetailPag
                   <AvatarImage src={post.author_avatar_url} />
                 )}
                 <AvatarFallback>
-                  {getUserInitials(post.author_full_name, post.author_username)}
+                  {getUserInitials(post.author_full_name ?? null, post.author_username ?? null)}
                 </AvatarFallback>
               </Avatar>
               <span className="font-medium">
