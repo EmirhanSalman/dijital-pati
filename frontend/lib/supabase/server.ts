@@ -108,6 +108,7 @@ export interface NewsItem {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  author_name?: string | null;
   profiles?: {
     full_name: string | null;
   };
@@ -133,7 +134,19 @@ export async function getAllNews(includeInactive = false): Promise<NewsItem[]> {
       return [];
     }
 
-    return data || [];
+    if (!data) {
+      return [];
+    }
+
+    // Map through data and add author_name field
+    return data.map((item) => {
+      const { profiles, ...newsWithoutProfiles } = item;
+      return {
+        ...newsWithoutProfiles,
+        author_name: profiles?.full_name || null,
+        profiles: profiles || undefined,
+      };
+    });
   } catch (error) {
     console.error("getAllNews error:", error);
     return [];
@@ -154,7 +167,17 @@ export async function getNewsById(id: string): Promise<NewsItem | null> {
       return null;
     }
 
-    return data;
+    if (!data) {
+      return null;
+    }
+
+    const { profiles, ...newsWithoutProfiles } = data;
+
+    return {
+      ...newsWithoutProfiles,
+      author_name: profiles?.full_name || null,
+      profiles: profiles || undefined,
+    };
   } catch (error) {
     console.error("getNewsById error:", error);
     return null;
