@@ -69,7 +69,7 @@ export default function PetFilters({
     router.push(`/lost-pets?${params.toString()}`);
   };
 
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;

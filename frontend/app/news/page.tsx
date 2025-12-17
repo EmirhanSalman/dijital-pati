@@ -6,6 +6,8 @@ import { Calendar, Newspaper, ArrowRight } from "lucide-react";
 import Image from "next/image";
 import DeleteButton from "@/components/forum/DeleteButton";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewsPage() {
   const newsList = await getAllNews();
   const userIsAdmin = await isAdmin();
