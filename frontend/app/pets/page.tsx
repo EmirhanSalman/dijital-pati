@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import PetCard from "@/components/PetCard";
 import FilterBar from "@/components/pets/FilterBar";
 import PaginationControls from "@/components/ui/PaginationControls";
+import EmptyState from "@/components/ui/empty-state";
 import { Suspense } from "react";
 import { getPets } from "@/lib/supabase/server";
 import type { Pet } from "@/lib/supabase/server";
@@ -64,21 +65,28 @@ export default async function PetsPage({ searchParams }: PetsPageProps) {
 
         {/* Pet Listesi */}
         {pets.length === 0 ? (
-          <Card className="max-w-md mx-auto border-2">
-            <CardContent className="pt-6 text-center py-12">
-              <PawPrint className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <h3 className="text-xl font-semibold mb-2">
-                {params.query || params.type || params.city
-                  ? "Filtrelere uygun evcil hayvan bulunamadı"
-                  : "Henüz evcil hayvan kaydı yok"}
-              </h3>
-              <p className="text-muted-foreground">
-                {params.query || params.type || params.city
-                  ? "Farklı filtreler deneyebilir veya arama terimini değiştirebilirsiniz."
-                  : "İlk evcil hayvan kaydını oluşturmak için oluştur sayfasına gidin."}
-              </p>
-            </CardContent>
-          </Card>
+          <div className="max-w-md mx-auto">
+            {params.query || params.type || params.city ? (
+              <Card className="border-2">
+                <CardContent className="pt-6 text-center py-12">
+                  <PawPrint className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                  <h3 className="text-xl font-semibold mb-2">
+                    Filtrelere uygun evcil hayvan bulunamadı
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Farklı filtreler deneyebilir veya arama terimini değiştirebilirsiniz.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyState
+                title="Henüz hiç ilan yok"
+                description="Kaybolan veya bulunan bir pati mi var?"
+                actionLabel="İlan Ver"
+                actionUrl="/create-pet"
+              />
+            )}
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

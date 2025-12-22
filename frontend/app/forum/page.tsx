@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Calendar, MessageSquare, User, Plus } from "lucide-react";
 import ForumFilters from "@/components/forum/ForumFilters";
 import VoteControl from "@/components/forum/VoteControl";
+import EmptyState from "@/components/ui/empty-state";
 import { Suspense } from "react";
 
 interface ForumPageProps {
@@ -89,20 +90,12 @@ export default async function ForumPage({ searchParams }: ForumPageProps) {
 
         {/* Konu Listesi */}
         {posts.length === 0 ? (
-          <Card className="border-2">
-            <CardContent className="pt-6 text-center py-12">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-xl font-semibold mb-2">Henüz konu açılmamış</h3>
-              <p className="text-muted-foreground mb-6">
-                İlk konuyu açmak için giriş yapın
-              </p>
-              {!user && (
-                <Button asChild>
-                  <Link href="/login">Giriş Yap</Link>
-                </Button>
-              )}
-            </CardContent>
-          </Card>
+          <EmptyState
+            title="Henüz hiç tartışma yok"
+            description="Topluluk sessiz... İlk konuyu sen başlat!"
+            actionLabel="Konu Aç"
+            actionUrl="/forum/create"
+          />
         ) : (
           <div className="space-y-4">
             {posts.map((post) => (
