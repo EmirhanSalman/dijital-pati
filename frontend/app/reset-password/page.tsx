@@ -10,6 +10,30 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 
+// Strong password validation regex
+// Requires: min 8 chars, at least one uppercase, one lowercase, one number, one special character
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*.,])[A-Za-z\d!@#$%^&*.,]{8,}$/;
+
+// Validate password strength and return error message if invalid
+function validatePasswordStrength(password: string): string | null {
+  if (password.length < 8) {
+    return "Şifre en az 8 karakter olmalıdır.";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "Şifre en az bir küçük harf içermelidir.";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "Şifre en az bir büyük harf içermelidir.";
+  }
+  if (!/\d/.test(password)) {
+    return "Şifre en az bir rakam içermelidir.";
+  }
+  if (!/[!@#$%^&*.,]/.test(password)) {
+    return "Şifre en az bir özel karakter (!@#$%^&*.,) içermelidir.";
+  }
+  return null;
+}
+
 export default function ResetPasswordPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -150,9 +174,10 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    // Validate password length (Supabase requires at least 6 characters)
-    if (trimmedNewPassword.length < 6) {
-      setError("Şifre en az 6 karakter olmalıdır.");
+    // Validate password strength
+    const passwordError = validatePasswordStrength(trimmedNewPassword);
+    if (passwordError) {
+      setError(passwordError);
       setLoading(false);
       return;
     }
@@ -241,8 +266,11 @@ export default function ResetPasswordPage() {
                     }}
                     required
                     disabled={loading}
-                    minLength={6}
+                    minLength={8}
                   />
+                <p className="text-xs text-muted-foreground">
+                  En az 8 karakter, büyük harf, küçük harf, rakam ve özel karakter içermelidir
+                </p>
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="confirmPassword" className="text-sm font-medium">
@@ -264,7 +292,7 @@ export default function ResetPasswordPage() {
                     }}
                     required
                     disabled={loading}
-                    minLength={6}
+                    minLength={8}
                   />
                 </div>
                 {passwordMismatch && newPassword && confirmPassword && (

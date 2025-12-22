@@ -10,6 +10,30 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 
+// Strong password validation regex
+// Requires: min 8 chars, at least one uppercase, one lowercase, one number, one special character
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*.,])[A-Za-z\d!@#$%^&*.,]{8,}$/;
+
+// Validate password strength and return error message if invalid
+function validatePasswordStrength(password: string): string | null {
+  if (password.length < 8) {
+    return "Şifre en az 8 karakter olmalıdır.";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "Şifre en az bir küçük harf içermelidir.";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "Şifre en az bir büyük harf içermelidir.";
+  }
+  if (!/\d/.test(password)) {
+    return "Şifre en az bir rakam içermelidir.";
+  }
+  if (!/[!@#$%^&*.,]/.test(password)) {
+    return "Şifre en az bir özel karakter (!@#$%^&*.,) içermelidir.";
+  }
+  return null;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -28,15 +52,21 @@ export default function RegisterPage() {
     setError(null);
     setSuccess(false);
 
+    // Trim passwords to remove any leading/trailing whitespace
+    const trimmedPassword = formData.password.trim();
+    const trimmedConfirmPassword = formData.confirmPassword.trim();
+
     // Şifre kontrolü
-    if (formData.password !== formData.confirmPassword) {
+    if (trimmedPassword !== trimmedConfirmPassword) {
       setError("Şifreler eşleşmiyor.");
       setLoading(false);
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("Şifre en az 6 karakter olmalıdır.");
+    // Validate password strength
+    const passwordError = validatePasswordStrength(trimmedPassword);
+    if (passwordError) {
+      setError(passwordError);
       setLoading(false);
       return;
     }
@@ -44,8 +74,8 @@ export default function RegisterPage() {
     try {
       const supabase = createClient();
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
+        email: formData.email.trim(),
+        password: trimmedPassword,
         options: {
           data: {
             full_name: formData.fullName,
@@ -159,10 +189,10 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   required
                   disabled={loading || success}
-                  minLength={6}
+                  minLength={8}
                 />
                 <p className="text-xs text-muted-foreground">
-                  En az 6 karakter olmalıdır
+                  En az 8 karakter, büyük harf, küçük harf, rakam ve özel karakter içermelidir
                 </p>
               </div>
               <div className="space-y-2">
