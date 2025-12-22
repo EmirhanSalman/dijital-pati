@@ -1,8 +1,5 @@
 import { Resend } from "resend";
 
-// Resend client oluştur
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 /**
  * Kayıp hayvan bulunduğunda sahibine email gönderir
  * @param email - Hayvan sahibinin email adresi
@@ -18,15 +15,26 @@ export async function sendLostPetAlert(
   finderContact: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    if (!process.env.RESEND_API_KEY) {
-      console.error("RESEND_API_KEY bulunamadı!");
+    if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.trim() === '') {
+      console.error("⚠️ [MAIL] RESEND_API_KEY bulunamadı veya boş!");
       return {
         success: false,
         error: "Email servisi yapılandırılmamış",
       };
     }
 
-    const fromEmail = process.env.RESEND_FROM_EMAIL || "noreply@dijitalpati.com";
+    // Resend client'ı fonksiyon içinde oluştur (lazy initialization)
+    const resend = new Resend(process.env.RESEND_API_KEY.trim());
+
+    // Use 'onboarding@resend.dev' as default if no verified domain is configured
+    const fromEmail = process.env.RESEND_FROM_EMAIL?.trim() || "onboarding@resend.dev";
+
+    console.log('📧 [MAIL] Attempting to send lost pet alert:', {
+      to: email,
+      from: fromEmail,
+      petName,
+      hasApiKey: !!process.env.RESEND_API_KEY,
+    });
 
     const { data, error } = await resend.emails.send({
       from: fromEmail,
@@ -130,21 +138,40 @@ Bu bildirim DijitalPati platformu tarafından gönderilmiştir.
     });
 
     if (error) {
-      console.error("Resend error:", error);
+      console.error("❌ [MAIL] Resend error:", {
+        error: error,
+        errorType: typeof error,
+        errorMessage: error?.message,
+        errorName: error?.name,
+        fullError: JSON.stringify(error, null, 2),
+      });
       return {
         success: false,
-        error: error.message || "Email gönderilemedi",
+        error: error?.message || "Email gönderilemedi",
       };
     }
+
+    console.log('✅ [MAIL] Lost pet alert sent successfully:', {
+      id: data?.id,
+      to: email,
+      from: fromEmail,
+    });
 
     return {
       success: true,
     };
   } catch (error: any) {
-    console.error("sendLostPetAlert error:", error);
+    console.error("❌ [MAIL] sendLostPetAlert error:", {
+      error: error,
+      errorType: typeof error,
+      errorMessage: error?.message,
+      errorStack: error?.stack,
+      errorName: error?.name,
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
+    });
     return {
       success: false,
-      error: error.message || "Email gönderilirken bir hata oluştu",
+      error: error?.message || "Email gönderilirken bir hata oluştu",
     };
   }
 }
