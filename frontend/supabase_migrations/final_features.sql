@@ -116,3 +116,4 @@ GROUP BY user_id;
 -- - Yorum bildirimi: Başka biri konuya yorum yapınca konu sahibine bildirim gider
 -- - Kayıp hayvan bildirimi: reportFoundPet action'ı tarafından manuel oluşturulacak
 
+

@@ -149,3 +149,4 @@ Bu bildirim DijitalPati platformu tarafından gönderilmiştir.
   }
 }
 
+

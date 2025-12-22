@@ -65,3 +65,4 @@ USING (
 -- - Kullanıcılar sadece kendi klasörüne resim yükleyebilir/güncelleyebilir/silebilir
 -- - URL formatı: {SUPABASE_URL}/storage/v1/object/public/avatars/{user_id}/{filename}
 
+

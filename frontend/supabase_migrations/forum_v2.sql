@@ -113,3 +113,4 @@ FROM public.forum_posts fp;
 -- - Eğer kullanıcı aynı oyu tekrar verirse, UPDATE yapılabilir (oy değişimi)
 -- - Puan hesaplama için get_post_score() fonksiyonu kullanılabilir
 
+

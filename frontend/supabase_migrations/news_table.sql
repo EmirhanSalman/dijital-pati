@@ -107,3 +107,4 @@ CREATE POLICY "Only admins can delete news"
 -- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
 -- CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
+

@@ -57,3 +57,4 @@ Eğer `hasServiceRoleKey: false` görüyorsanız:
 - `.env.local` dosyası zaten `.gitignore`'da olmalı
 - Bu key tüm RLS politikalarını bypass eder, dikkatli kullanın!
 
+

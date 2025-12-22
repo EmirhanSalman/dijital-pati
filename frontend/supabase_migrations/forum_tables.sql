@@ -102,3 +102,4 @@ CREATE POLICY "Users can delete their own forum posts"
 -- - Kategori sistemi ileride genişletilebilir
 -- - Yorum sistemi için ayrı bir tablo (forum_comments) ileride eklenecek
 
+
