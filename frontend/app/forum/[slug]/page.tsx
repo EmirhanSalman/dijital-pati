@@ -7,12 +7,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeft, Calendar, User, AlertCircle } from "lucide-react";
 import VoteControl from "@/components/forum/VoteControl";
 import DeleteButton from "@/components/forum/DeleteButton";
-import dynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
 import type { Metadata } from "next";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Lazy load comment components to reduce initial bundle size and hydration cost
-const CommentList = dynamic(() => import("@/components/forum/CommentList"), {
+const CommentList = nextDynamic(() => import("@/components/forum/CommentList"), {
   loading: () => (
     <div className="space-y-4">
       <Skeleton className="h-6 w-32" />
@@ -32,10 +32,9 @@ const CommentList = dynamic(() => import("@/components/forum/CommentList"), {
       </div>
     </div>
   ),
-  ssr: false, // Disable SSR for comments since they're below the fold
 });
 
-const CommentForm = dynamic(() => import("@/components/forum/CommentForm"), {
+const CommentForm = nextDynamic(() => import("@/components/forum/CommentForm"), {
   loading: () => (
     <div className="space-y-4">
       <Skeleton className="h-6 w-32" />
@@ -43,7 +42,6 @@ const CommentForm = dynamic(() => import("@/components/forum/CommentForm"), {
       <Skeleton className="h-10 w-24 ml-auto" />
     </div>
   ),
-  ssr: false, // Disable SSR for comment form
 });
 
 // Force dynamic rendering to support authentication checks (cookies)
