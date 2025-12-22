@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, FormEvent, useEffect, Suspense } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Dog, Key, Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,49 +10,40 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 
-function ResetPasswordForm() {
+export default function ResetPasswordPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMismatch, setPasswordMismatch] = useState(false);
-  const [initializing, setInitializing] = useState(true);
-  const [initialized, setInitialized] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [hasSession, setHasSession] = useState(false);
 
-  // Handle auth code exchange on mount
+  // Check if user has an active session (established by the callback route)
   useEffect(() => {
-    const exchangeCodeForSession = async () => {
-      const code = searchParams.get("code");
-      
-      if (!code) {
-        setError("Geçersiz veya eksik doğrulama kodu. Lütfen e-postanızdaki bağlantıyı kullanın.");
-        setInitializing(false);
-        return;
-      }
-
+    const checkSession = async () => {
       try {
         const supabase = createClient();
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        const { data: { user }, error: sessionError } = await supabase.auth.getUser();
 
-        if (exchangeError) {
-          setError(exchangeError.message || "Oturum oluşturulurken bir hata oluştu. Lütfen bağlantıyı tekrar deneyin.");
-          setInitializing(false);
+        if (sessionError || !user) {
+          // No session found, redirect to login
+          router.push("/login?error=" + encodeURIComponent("Oturum bulunamadı. Lütfen e-postanızdaki bağlantıyı kullanın."));
           return;
         }
 
-        setInitialized(true);
-        setInitializing(false);
+        setHasSession(true);
+        setCheckingSession(false);
       } catch (err: any) {
         setError(err.message || "Beklenmeyen bir hata oluştu.");
-        setInitializing(false);
+        setCheckingSession(false);
       }
     };
 
-    exchangeCodeForSession();
-  }, [searchParams]);
+    checkSession();
+  }, [router]);
 
   // Redirect to login after success
   useEffect(() => {
@@ -63,6 +54,83 @@ function ResetPasswordForm() {
       return () => clearTimeout(timer);
     }
   }, [success, router]);
+
+  // Show loading state while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md"
+        >
+          <Card className="border-2">
+            <CardHeader className="text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="bg-primary/10 p-3 rounded-full">
+                  <Dog className="h-8 w-8 text-primary" />
+                </div>
+              </div>
+              <CardTitle className="text-3xl">Şifre Sıfırla</CardTitle>
+              <CardDescription>
+                Doğrulama yapılıyor...
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // If no session after checking, show error (though we should have redirected)
+  if (!hasSession) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md"
+        >
+          <Card className="border-2">
+            <CardHeader className="text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="bg-primary/10 p-3 rounded-full">
+                  <Dog className="h-8 w-8 text-primary" />
+                </div>
+              </div>
+              <CardTitle className="text-3xl">Şifre Sıfırla</CardTitle>
+              <CardDescription>
+                Oturum hatası
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg flex items-center space-x-2 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                <span>Geçersiz veya eksik oturum. Lütfen e-postanızdaki bağlantıyı kullanın.</span>
+              </div>
+              <Button variant="outline" className="w-full" asChild>
+                <Link href="/forgot-password">
+                  Yeni Şifre Sıfırlama Bağlantısı İste
+                </Link>
+              </Button>
+              <div className="text-center text-sm text-muted-foreground">
+                <Link href="/login" className="text-primary hover:underline font-medium">
+                  Giriş Sayfasına Dön
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,83 +172,6 @@ function ResetPasswordForm() {
       setLoading(false);
     }
   };
-
-  // Show loading state while exchanging code
-  if (initializing) {
-    return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
-        >
-          <Card className="border-2">
-            <CardHeader className="text-center space-y-4">
-              <div className="flex justify-center">
-                <div className="bg-primary/10 p-3 rounded-full">
-                  <Dog className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-              <CardTitle className="text-3xl">Şifre Sıfırla</CardTitle>
-              <CardDescription>
-                Doğrulama yapılıyor...
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
-
-  // Show error if initialization failed
-  if (!initialized && error) {
-    return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md"
-        >
-          <Card className="border-2">
-            <CardHeader className="text-center space-y-4">
-              <div className="flex justify-center">
-                <div className="bg-primary/10 p-3 rounded-full">
-                  <Dog className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-              <CardTitle className="text-3xl">Şifre Sıfırla</CardTitle>
-              <CardDescription>
-                Doğrulama hatası
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg flex items-center space-x-2 text-sm">
-                <AlertCircle className="h-4 w-4" />
-                <span>{error}</span>
-              </div>
-              <Button variant="outline" className="w-full" asChild>
-                <Link href="/forgot-password">
-                  Yeni Şifre Sıfırlama Bağlantısı İste
-                </Link>
-              </Button>
-              <div className="text-center text-sm text-muted-foreground">
-                <Link href="/login" className="text-primary hover:underline font-medium">
-                  Giriş Sayfasına Dön
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -282,7 +273,7 @@ function ResetPasswordForm() {
                   className="w-full" 
                   size="lg" 
                   type="submit" 
-                  disabled={loading || passwordMismatch || !newPassword || !confirmPassword || !initialized}
+                  disabled={loading || passwordMismatch || !newPassword || !confirmPassword}
                 >
                   {loading ? (
                     <>
@@ -311,27 +302,6 @@ function ResetPasswordForm() {
         </Card>
       </motion.div>
     </div>
-  );
-}
-
-export default function ResetPasswordPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
-          <Card className="border-2 w-full max-w-md">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-              <p className="text-center text-muted-foreground">Yükleniyor...</p>
-            </CardContent>
-          </Card>
-        </div>
-      }
-    >
-      <ResetPasswordForm />
-    </Suspense>
   );
 }
 
