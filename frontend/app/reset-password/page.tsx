@@ -138,8 +138,12 @@ export default function ResetPasswordPage() {
     setError(null);
     setPasswordMismatch(false);
 
+    // Trim passwords to remove any leading/trailing whitespace
+    const trimmedNewPassword = newPassword.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+
     // Validate passwords match
-    if (newPassword !== confirmPassword) {
+    if (trimmedNewPassword !== trimmedConfirmPassword) {
       setPasswordMismatch(true);
       setError("Şifreler eşleşmiyor. Lütfen tekrar kontrol edin.");
       setLoading(false);
@@ -147,7 +151,7 @@ export default function ResetPasswordPage() {
     }
 
     // Validate password length (Supabase requires at least 6 characters)
-    if (newPassword.length < 6) {
+    if (trimmedNewPassword.length < 6) {
       setError("Şifre en az 6 karakter olmalıdır.");
       setLoading(false);
       return;
@@ -156,7 +160,7 @@ export default function ResetPasswordPage() {
     try {
       const supabase = createClient();
       const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
+        password: trimmedNewPassword,
       });
 
       if (updateError) {
