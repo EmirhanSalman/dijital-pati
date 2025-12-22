@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getForumPostBySlug, isAdmin } from "@/lib/supabase/server";
+import { getForumPostBySlug, isAdmin, getForumPosts } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -9,15 +9,54 @@ import VoteControl from "@/components/forum/VoteControl";
 import DeleteButton from "@/components/forum/DeleteButton";
 import CommentList from "@/components/forum/CommentList";
 import CommentForm from "@/components/forum/CommentForm";
+import type { Metadata } from "next";
+
+// ISR: Revalidate every 60 seconds
+export const revalidate = 60;
 
 interface ForumPostDetailPageProps {
   params: Promise<{ slug: string }>;
 }
 
-export default async function ForumPostDetailPage({ params }: ForumPostDetailPageProps) {
+// Generate metadata for SEO
+export async function generateMetadata({ params }: ForumPostDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
   const post = await getForumPostBySlug(slug);
-  const userIsAdmin = await isAdmin();
+
+  if (!post) {
+    return {
+      title: "Konu Bulunamadı | DijitalPati",
+    };
+  }
+
+  return {
+    title: `${post.title} | DijitalPati Forum`,
+    description: post.content.substring(0, 160) + "...",
+  };
+}
+
+// Pre-generate static params for popular posts
+export async function generateStaticParams() {
+  try {
+    // Fetch the most recent 20 posts to pre-build them
+    const posts = await getForumPosts(undefined, undefined, "newest");
+    return posts.slice(0, 20).map((post) => ({
+      slug: post.slug,
+    }));
+  } catch (error) {
+    console.error("Error generating static params for forum:", error);
+    return [];
+  }
+}
+
+export default async function ForumPostDetailPage({ params }: ForumPostDetailPageProps) {
+  const { slug } = await params;
+  
+  // Parallel data fetching to avoid waterfalls
+  const [post, userIsAdmin] = await Promise.all([
+    getForumPostBySlug(slug),
+    isAdmin(),
+  ]);
 
   // Gönderi bulunamazsa 404 göster
   if (!post) {
