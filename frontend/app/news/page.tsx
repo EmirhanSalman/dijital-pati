@@ -76,12 +76,13 @@ export default async function NewsPage() {
 
                 {/* Görsel */}
                 {news.image_url && (
-                  <div className="relative w-full h-48 overflow-hidden rounded-t-lg">
+                  <div className="relative w-full h-48 overflow-hidden rounded-t-lg aspect-[16/9]">
                     <Image
                       src={news.image_url}
                       alt={news.title}
                       fill
                       className="object-cover"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                   </div>
                 )}

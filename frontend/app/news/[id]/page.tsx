@@ -84,6 +84,7 @@ export default async function NewsDetailPage({ params }: NewsDetailPageProps) {
               alt={news.title}
               fill
               className="object-cover"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 90vw, 896px"
               priority
             />
           </div>

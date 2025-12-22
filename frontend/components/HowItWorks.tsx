@@ -123,7 +123,7 @@ export default function HowItWorks() {
                 alt="Nasıl Çalışır"
                 fill
                 className="object-cover rounded-2xl shadow-2xl"
-                sizes="(max-width: 768px) 100vw, 50vw"
+                sizes="100vw"
                 priority
                 quality={90}
               />

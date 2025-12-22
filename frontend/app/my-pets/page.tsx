@@ -236,7 +236,7 @@ export default function MyPetsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {pets.map((pet) => (
               <Card key={pet.token_id} className="border-2 hover:shadow-lg transition-shadow overflow-hidden">
-                <div className="relative h-56 w-full bg-gray-100">
+                <div className="relative h-56 w-full bg-gray-100 aspect-[4/3]">
                   <Image
                     src={pet.image_url}
                     alt={pet.name}

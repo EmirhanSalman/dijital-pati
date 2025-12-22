@@ -86,7 +86,7 @@ export default async function AdminNewsPage() {
             {newsList.map((news) => (
               <Card key={news.id} className="border-2 hover:border-primary/50 transition-colors">
                 {news.image_url && (
-                  <div className="relative h-48 w-full overflow-hidden rounded-t-lg">
+                  <div className="relative h-48 w-full overflow-hidden rounded-t-lg aspect-[16/9]">
                     <Image
                       src={news.image_url}
                       alt={news.title}

@@ -60,12 +60,13 @@ export default async function NewsSection() {
           {news.map((item: NewsItem) => (
             <Card key={item.id} className="border-2 hover:border-primary/50 transition-colors h-full flex flex-col">
               {item.image_url && (
-                <div className="relative w-full h-48 overflow-hidden rounded-t-lg">
+                <div className="relative w-full h-48 overflow-hidden rounded-t-lg aspect-[16/9]">
                   <Image
                     src={item.image_url}
                     alt={item.title}
                     fill
                     className="object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
                 </div>
               )}
