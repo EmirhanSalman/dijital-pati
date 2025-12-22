@@ -162,9 +162,10 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
             <Input
               id="finderName"
               value={formData.finderName}
-              onChange={(e) =>
-                setFormData({ ...formData, finderName: e.target.value })
-              }
+              onChange={(e) => {
+                // Immediate update for input value (critical for UX)
+                setFormData((prev) => ({ ...prev, finderName: e.target.value }));
+              }}
               placeholder="Adınız ve soyadınız"
               required
               className="mt-2"
@@ -177,9 +178,10 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
               id="finderPhone"
               type="tel"
               value={formData.finderPhone}
-              onChange={(e) =>
-                setFormData({ ...formData, finderPhone: e.target.value })
-              }
+              onChange={(e) => {
+                // Immediate update for input value (critical for UX)
+                setFormData((prev) => ({ ...prev, finderPhone: e.target.value }));
+              }}
               placeholder="0555 123 45 67"
               required
               className="mt-2"
@@ -191,9 +193,10 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
             <Textarea
               id="message"
               value={formData.message}
-              onChange={(e) =>
-                setFormData({ ...formData, message: e.target.value })
-              }
+              onChange={(e) => {
+                // Immediate update for input value (critical for UX)
+                setFormData((prev) => ({ ...prev, message: e.target.value }));
+              }}
               placeholder="Örn: Kedinizi parkta gördüm, çok sağlıklı görünüyordu..."
               rows={4}
               required

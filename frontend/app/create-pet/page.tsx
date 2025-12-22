@@ -131,12 +131,14 @@ export default function CreatePetPage() {
     }
   };
 
-  // File Selection
+  // File Selection - Optimized with immediate updates
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Immediate updates for file selection (critical for UX)
       setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      const objectUrl = URL.createObjectURL(file);
+      setPreviewUrl(objectUrl);
       setError(null);
     }
   };
@@ -152,13 +154,15 @@ export default function CreatePetPage() {
 
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith("image/")) {
+      // Immediate updates for file selection (critical for UX)
       setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+      const objectUrl = URL.createObjectURL(file);
+      setPreviewUrl(objectUrl);
       setError(null);
     }
   };
 
-  // Form Submit
+  // Form Submit - Optimized async handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -491,9 +495,10 @@ export default function CreatePetPage() {
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
+                    onChange={(e) => {
+                      // Immediate update for input value (critical for UX)
+                      setFormData((prev) => ({ ...prev, name: e.target.value }));
+                    }}
                     className="bg-slate-900/50 border-white/10 text-white mt-2"
                     placeholder="Örn: Max, Bella..."
                     required
@@ -533,9 +538,10 @@ export default function CreatePetPage() {
                   <Textarea
                     id="description"
                     value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
+                    onChange={(e) => {
+                      // Immediate update for input value (critical for UX)
+                      setFormData((prev) => ({ ...prev, description: e.target.value }));
+                    }}
                     className="bg-slate-900/50 border-white/10 text-white mt-2"
                     placeholder="Evcil hayvanınız hakkında bilgiler..."
                     rows={4}
@@ -551,9 +557,10 @@ export default function CreatePetPage() {
                     id="phone"
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
-                    }
+                    onChange={(e) => {
+                      // Immediate update for input value (critical for UX)
+                      setFormData((prev) => ({ ...prev, phone: e.target.value }));
+                    }}
                     className="bg-slate-900/50 border-white/10 text-white mt-2"
                     placeholder="0555 123 45 67"
                   />
@@ -571,9 +578,10 @@ export default function CreatePetPage() {
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
+                    onChange={(e) => {
+                      // Immediate update for input value (critical for UX)
+                      setFormData((prev) => ({ ...prev, email: e.target.value }));
+                    }}
                     className="bg-slate-900/50 border-white/10 text-white mt-2"
                     placeholder="ornek@site.com"
                   />
@@ -626,9 +634,10 @@ export default function CreatePetPage() {
                     <Input
                       id="district"
                       value={formData.district}
-                      onChange={(e) =>
-                        setFormData({ ...formData, district: e.target.value })
-                      }
+                      onChange={(e) => {
+                        // Immediate update for input value (critical for UX)
+                        setFormData((prev) => ({ ...prev, district: e.target.value }));
+                      }}
                       className="bg-slate-900/50 border-white/10 text-white mt-2"
                       placeholder="Örn: Kadıköy, Çankaya..."
                     />

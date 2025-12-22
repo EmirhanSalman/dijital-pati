@@ -11,8 +11,14 @@ import {
   ExternalLink,
 } from "lucide-react";
 import PetQrCard from "@/components/PetQrCard";
-import ContactOwnerModal from "@/components/ContactOwnerModal";
+import dynamic from "next/dynamic";
 import DigitalPatiABI from "@/utils/DigitalPatiABI.json";
+
+// Lazy load ContactOwnerModal since it's only shown when needed (below the fold)
+const ContactOwnerModal = dynamic(() => import("@/components/ContactOwnerModal"), {
+  loading: () => null, // No loading state needed since it's in a modal
+  ssr: false,
+});
 import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
