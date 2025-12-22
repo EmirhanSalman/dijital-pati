@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, FormEvent, useEffect } from "react";
+import { useState, FormEvent, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Dog, Key, Loader2, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,14 +10,49 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  const [initialized, setInitialized] = useState(false);
+
+  // Handle auth code exchange on mount
+  useEffect(() => {
+    const exchangeCodeForSession = async () => {
+      const code = searchParams.get("code");
+      
+      if (!code) {
+        setError("Geçersiz veya eksik doğrulama kodu. Lütfen e-postanızdaki bağlantıyı kullanın.");
+        setInitializing(false);
+        return;
+      }
+
+      try {
+        const supabase = createClient();
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (exchangeError) {
+          setError(exchangeError.message || "Oturum oluşturulurken bir hata oluştu. Lütfen bağlantıyı tekrar deneyin.");
+          setInitializing(false);
+          return;
+        }
+
+        setInitialized(true);
+        setInitializing(false);
+      } catch (err: any) {
+        setError(err.message || "Beklenmeyen bir hata oluştu.");
+        setInitializing(false);
+      }
+    };
+
+    exchangeCodeForSession();
+  }, [searchParams]);
 
   // Redirect to login after success
   useEffect(() => {
@@ -69,6 +104,83 @@ export default function ResetPasswordPage() {
       setLoading(false);
     }
   };
+
+  // Show loading state while exchanging code
+  if (initializing) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md"
+        >
+          <Card className="border-2">
+            <CardHeader className="text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="bg-primary/10 p-3 rounded-full">
+                  <Dog className="h-8 w-8 text-primary" />
+                </div>
+              </div>
+              <CardTitle className="text-3xl">Şifre Sıfırla</CardTitle>
+              <CardDescription>
+                Doğrulama yapılıyor...
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Show error if initialization failed
+  if (!initialized && error) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-full max-w-md"
+        >
+          <Card className="border-2">
+            <CardHeader className="text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="bg-primary/10 p-3 rounded-full">
+                  <Dog className="h-8 w-8 text-primary" />
+                </div>
+              </div>
+              <CardTitle className="text-3xl">Şifre Sıfırla</CardTitle>
+              <CardDescription>
+                Doğrulama hatası
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-destructive/10 text-destructive px-4 py-3 rounded-lg flex items-center space-x-2 text-sm">
+                <AlertCircle className="h-4 w-4" />
+                <span>{error}</span>
+              </div>
+              <Button variant="outline" className="w-full" asChild>
+                <Link href="/forgot-password">
+                  Yeni Şifre Sıfırlama Bağlantısı İste
+                </Link>
+              </Button>
+              <div className="text-center text-sm text-muted-foreground">
+                <Link href="/login" className="text-primary hover:underline font-medium">
+                  Giriş Sayfasına Dön
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -170,7 +282,7 @@ export default function ResetPasswordPage() {
                   className="w-full" 
                   size="lg" 
                   type="submit" 
-                  disabled={loading || passwordMismatch || !newPassword || !confirmPassword}
+                  disabled={loading || passwordMismatch || !newPassword || !confirmPassword || !initialized}
                 >
                   {loading ? (
                     <>
@@ -199,6 +311,27 @@ export default function ResetPasswordPage() {
         </Card>
       </motion.div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
+          <Card className="border-2 w-full max-w-md">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+              <p className="text-center text-muted-foreground">Yükleniyor...</p>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
 
