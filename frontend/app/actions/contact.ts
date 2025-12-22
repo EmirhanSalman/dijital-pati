@@ -62,49 +62,69 @@ ${locationLink ? `Konum: ${locationLink}` : 'Konum paylaşılmadı.'}
 Bu mesaj DijitalPati platformu üzerinden gönderilmiştir.
 `.trim()
 
-    // Resend API key kontrolü
+    // Resend API key kontrolü ve validasyonu
     const resendApiKey = process.env.RESEND_API_KEY
+    let emailError: string | null = null
 
-    if (resendApiKey) {
+    if (!resendApiKey || resendApiKey.trim() === '') {
+      console.warn('⚠️ [RESEND] RESEND_API_KEY environment variable is missing or empty')
+      console.warn('⚠️ [RESEND] Email will not be sent. Please add RESEND_API_KEY to your .env.local file')
+      emailError = 'RESEND_API_KEY environment variable is missing'
+      // Continue with database operations even if email fails
+    } else {
       // Resend API kullanarak mail gönder
       try {
         const resend = await import('resend')
-        const resendClient = new resend.Resend(resendApiKey)
+        const resendClient = new resend.Resend(resendApiKey.trim())
+
+        // Use 'onboarding@resend.dev' as default if no verified domain is configured
+        // This is Resend's default sender for unverified domains
+        const fromEmail = process.env.RESEND_FROM_EMAIL?.trim() || 'onboarding@resend.dev'
+        
+        console.log('📧 [RESEND] Attempting to send email:', {
+          from: fromEmail,
+          to: ownerEmail,
+          subject: emailSubject,
+          hasApiKey: !!resendApiKey,
+          apiKeyLength: resendApiKey.length,
+        })
 
         const result = await resendClient.emails.send({
-          from: process.env.RESEND_FROM_EMAIL || 'noreply@dijitalpati.com',
+          from: fromEmail,
           to: ownerEmail,
           subject: emailSubject,
           text: emailBody,
         })
 
         if (result.error) {
-          console.error('Resend API error:', result.error)
-          // Hata olsa bile simülasyon olarak devam et
-          console.log('📧 Mail gönderildi (simülasyon):', {
-            to: ownerEmail,
-            subject: emailSubject,
-            body: emailBody,
+          console.error('❌ [RESEND] Email send failed:', {
+            error: result.error,
+            errorType: typeof result.error,
+            errorMessage: result.error.message,
+            errorName: result.error.name,
+            fullError: JSON.stringify(result.error, null, 2),
           })
+          emailError = result.error.message || 'Unknown Resend error'
+          // Continue with database operations even if email fails
         } else {
-          console.log('📧 Mail başarıyla gönderildi:', result.data)
+          console.log('✅ [RESEND] Email sent successfully:', {
+            id: result.data?.id,
+            to: ownerEmail,
+            from: fromEmail,
+          })
         }
-      } catch (resendError) {
-        console.error('Resend import/usage error:', resendError)
-        // Hata olsa bile simülasyon olarak devam et
-        console.log('📧 Mail gönderildi (simülasyon):', {
-          to: ownerEmail,
-          subject: emailSubject,
-          body: emailBody,
+      } catch (resendError: any) {
+        console.error('❌ [RESEND] Resend import/usage error:', {
+          error: resendError,
+          errorType: typeof resendError,
+          errorMessage: resendError?.message,
+          errorStack: resendError?.stack,
+          errorName: resendError?.name,
+          fullError: JSON.stringify(resendError, Object.getOwnPropertyNames(resendError), 2),
         })
+        emailError = resendError?.message || 'Resend service error'
+        // Continue with database operations even if email fails
       }
-    } else {
-      // Resend API key yoksa simülasyon
-      console.log('📧 Mail gönderildi (simülasyon):', {
-        to: ownerEmail,
-        subject: emailSubject,
-        body: emailBody,
-      })
     }
 
     // Veritabanına mesaj kaydet ve bildirim oluştur
@@ -302,9 +322,12 @@ Bu mesaj DijitalPati platformu üzerinden gönderilmiştir.
       console.error('Bildirim oluşturma hatası:', notificationError)
     }
 
+    // Return success, but include email error if it occurred
+    // Database operations succeeded, so we return success even if email failed
     return {
       success: true,
       message: 'Mesajınız başarıyla gönderildi.',
+      emailError: emailError || undefined, // Include email error if it occurred
     }
   } catch (error: any) {
     console.error('sendContactEmail error:', error)
