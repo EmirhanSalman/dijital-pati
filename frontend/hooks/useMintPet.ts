@@ -38,48 +38,137 @@ export function useMintPet(): UseMintPetReturn {
 
       setStatus("minting");
 
-      // Call mintPet function - it returns the tokenId directly
+      // Get the user's address before minting (for fallback methods)
+      const userAddress = await signer.getAddress();
+      console.log("👤 User address:", userAddress);
+
+      // Call mintPet function
       const tx = await contract.mintPet(ipfsUri, contactInfo);
+      console.log("📤 Transaction sent:", tx.hash);
       
-      // Method 1: Try to get tokenId from the transaction return value (most reliable)
       let mintedTokenId: string | null = null;
       
       try {
         // Wait for transaction to be mined
         const receipt = await tx.wait();
+        console.log("✅ Transaction confirmed in block:", receipt.blockNumber);
+        console.log("📋 Total logs in receipt:", receipt.logs.length);
         
-        // The mintPet function returns uint256 (tokenId), so we can get it from the receipt
-        // However, ethers v6 doesn't directly expose return values in receipts
-        // So we'll use event parsing as the primary method
-        
-        // Method 2: Parse PetMinted event from logs (most reliable for event-based contracts)
         const iface = new ethers.Interface(DigitalPatiABI.abi);
         
-        // Find PetMinted event in the receipt logs
-        const petMintedEvent = receipt.logs.find((log: any) => {
+        // Log all events found in the receipt for debugging
+        console.log("🔍 Analyzing all events in receipt...");
+        const allEvents: any[] = [];
+        
+        for (let i = 0; i < receipt.logs.length; i++) {
+          const log = receipt.logs[i];
+          
+          // Only process logs from our contract
+          if (log.address.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()) {
+            continue;
+          }
+          
           try {
             const parsed = iface.parseLog(log);
-            return parsed && parsed.name === "PetMinted";
-          } catch {
-            return false;
-          }
-        });
-        
-        if (petMintedEvent) {
-          try {
-            const parsed = iface.parseLog(petMintedEvent);
-            if (parsed && parsed.name === "PetMinted") {
-              // tokenId is the first indexed parameter
-              mintedTokenId = parsed.args[0].toString();
-              console.log("✅ Token ID extracted from PetMinted event:", mintedTokenId);
+            if (parsed) {
+              allEvents.push({
+                index: i,
+                name: parsed.name,
+                args: parsed.args.map((arg: any) => arg.toString()),
+                topics: log.topics,
+              });
+              console.log(`  📌 Event ${i}: ${parsed.name}`, parsed.args);
             }
-          } catch (parseError) {
-            console.error("Error parsing PetMinted event:", parseError);
+          } catch {
+            // Not a contract event, might be a standard ERC-721 Transfer
+            allEvents.push({
+              index: i,
+              name: "Unknown or ERC-721 Transfer",
+              topics: log.topics,
+              data: log.data,
+            });
           }
         }
         
-        // Method 3: Fallback - manually decode using event signature
+        console.log("📊 All events found:", JSON.stringify(allEvents, null, 2));
+        
+        // METHOD 1: Parse ERC-721 Transfer event (most reliable for ERC-721 mints)
+        // Transfer event signature: Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
+        // When minting, 'from' is address(0), 'to' is the minter, 'tokenId' is in topics[3]
+        const transferEventTopic = ethers.id("Transfer(address,address,uint256)");
+        const zeroAddress = "0x0000000000000000000000000000000000000000";
+        
+        console.log("🔍 Looking for ERC-721 Transfer event...");
+        console.log("  Expected Transfer topic:", transferEventTopic);
+        console.log("  Contract address:", CONTRACT_ADDRESS);
+        console.log("  User address:", userAddress);
+        
+        for (const log of receipt.logs) {
+          // Only check logs from our contract
+          if (log.address.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()) {
+            continue;
+          }
+          
+          // Check if this is a Transfer event (topics[0] is the event signature)
+          if (log.topics && log.topics.length >= 4 && log.topics[0] === transferEventTopic) {
+            // Check if this is a mint (from address is zero)
+            const fromAddress = log.topics[1];
+            const toAddress = log.topics[2];
+            const tokenIdTopic = log.topics[3];
+            
+            console.log("  Found Transfer event:", {
+              from: fromAddress,
+              to: toAddress,
+              tokenIdTopic: tokenIdTopic,
+              isMint: fromAddress?.toLowerCase() === zeroAddress.toLowerCase(),
+              toMatchesUser: toAddress?.toLowerCase() === userAddress.toLowerCase(),
+            });
+            
+            if (fromAddress && fromAddress.toLowerCase() === zeroAddress.toLowerCase()) {
+              // tokenId is in topics[3] (third indexed parameter, which is the 4th element)
+              if (tokenIdTopic) {
+                // Convert from hex to number
+                try {
+                  mintedTokenId = BigInt(tokenIdTopic).toString();
+                  console.log("✅ Token ID extracted from ERC-721 Transfer event (mint):", mintedTokenId);
+                  break;
+                } catch (parseError) {
+                  console.error("❌ Error parsing tokenId from Transfer event:", parseError);
+                }
+              }
+            }
+          }
+        }
+        
+        // METHOD 2: Parse PetMinted custom event
         if (!mintedTokenId) {
+          console.log("🔍 Looking for PetMinted custom event...");
+          const petMintedEvent = receipt.logs.find((log: any) => {
+            try {
+              const parsed = iface.parseLog(log);
+              return parsed && parsed.name === "PetMinted";
+            } catch {
+              return false;
+            }
+          });
+          
+          if (petMintedEvent) {
+            try {
+              const parsed = iface.parseLog(petMintedEvent);
+              if (parsed && parsed.name === "PetMinted") {
+                // tokenId is the first indexed parameter
+                mintedTokenId = parsed.args[0].toString();
+                console.log("✅ Token ID extracted from PetMinted event:", mintedTokenId);
+              }
+            } catch (parseError) {
+              console.error("❌ Error parsing PetMinted event:", parseError);
+            }
+          }
+        }
+        
+        // METHOD 3: Manual event decoding using event signature
+        if (!mintedTokenId) {
+          console.log("🔍 Trying manual event decoding...");
           const eventTopic = ethers.id("PetMinted(uint256,address)");
           
           for (const log of receipt.logs) {
@@ -90,62 +179,104 @@ export function useMintPet(): UseMintPetReturn {
                 console.log("✅ Token ID extracted from manual event decoding:", mintedTokenId);
                 break;
               } catch (e) {
-                console.error("Error decoding event manually:", e);
+                console.error("❌ Error decoding event manually:", e);
               }
             }
           }
         }
         
-        // Method 4: Last resort - try to call the contract's return value
-        // Note: This won't work directly, but we can query the contract state
+        // METHOD 4: Fallback - Query contract state
         if (!mintedTokenId) {
-          console.warn("⚠️ Could not extract tokenId from events. Attempting alternative method...");
+          console.warn("⚠️ Could not extract tokenId from events. Trying contract state queries...");
           
-          // Try to get the latest token ID by checking the contract's totalSupply or similar
-          // This is a fallback and may not work for all contracts
           try {
-            // If the contract has a way to get the latest token, use it
-            // For now, we'll log the receipt for debugging
-            console.log("Transaction receipt:", {
-              transactionHash: receipt.hash,
-              blockNumber: receipt.blockNumber,
-              logs: receipt.logs.length,
-              logDetails: receipt.logs.map((log: any) => ({
-                address: log.address,
-                topics: log.topics,
-                data: log.data,
-              })),
-            });
-          } catch (queryError) {
-            console.error("Error querying contract state:", queryError);
+            // Try to get totalSupply (if contract supports it)
+            try {
+              if (typeof contract.totalSupply === "function") {
+                const totalSupply = await contract.totalSupply();
+                const totalSupplyBigInt = typeof totalSupply === "bigint" ? totalSupply : BigInt(totalSupply.toString());
+                if (totalSupplyBigInt > 0n) {
+                  // The new token ID would be totalSupply - 1 (0-indexed)
+                  mintedTokenId = (totalSupplyBigInt - 1n).toString();
+                  console.log("✅ Token ID extracted from totalSupply():", mintedTokenId);
+                }
+              }
+            } catch (totalSupplyError: any) {
+              console.log("ℹ️ totalSupply() not available or failed:", totalSupplyError.message);
+            }
+            
+            // Try to get tokenOfOwnerByIndex (if contract supports it - requires ERC721Enumerable)
+            if (!mintedTokenId) {
+              try {
+                if (typeof contract.tokenOfOwnerByIndex === "function") {
+                  // Get the user's token count
+                  const balance = await contract.balanceOf(userAddress);
+                  const balanceBigInt = typeof balance === "bigint" ? balance : BigInt(balance.toString());
+                  if (balanceBigInt > 0n) {
+                    // Get the last token (most recently minted)
+                    const lastTokenIndex = balanceBigInt - 1n;
+                    const tokenId = await contract.tokenOfOwnerByIndex(userAddress, lastTokenIndex);
+                    mintedTokenId = tokenId.toString();
+                    console.log("✅ Token ID extracted from tokenOfOwnerByIndex():", mintedTokenId);
+                  }
+                } else {
+                  console.log("ℹ️ tokenOfOwnerByIndex() not available in contract");
+                }
+              } catch (tokenOfOwnerError: any) {
+                console.log("ℹ️ tokenOfOwnerByIndex() failed:", tokenOfOwnerError.message);
+              }
+            }
+            
+            // Last resort: Try to find the token by checking balance before and after
+            // This is less reliable but might work
+            if (!mintedTokenId) {
+              try {
+                const balance = await contract.balanceOf(userAddress);
+                const balanceBigInt = typeof balance === "bigint" ? balance : BigInt(balance.toString());
+                console.log("ℹ️ User balance:", balanceBigInt.toString());
+                // Note: We can't reliably determine which token was just minted this way
+                // without knowing the previous balance, so we skip this method
+              } catch (balanceError: any) {
+                console.log("ℹ️ balanceOf() failed:", balanceError.message);
+              }
+            }
+          } catch (queryError: any) {
+            console.error("❌ Error querying contract state:", queryError);
           }
         }
         
+        // Final check - if still no tokenId, log everything for debugging
         if (!mintedTokenId) {
-          // Log detailed error information for debugging
-          console.error("❌ Failed to extract tokenId. Receipt details:", {
+          console.error("❌ Failed to extract tokenId. Full receipt details:", {
             transactionHash: receipt.hash,
             blockNumber: receipt.blockNumber,
-            logsCount: receipt.logs.length,
+            blockHash: receipt.blockHash,
+            from: receipt.from,
+            to: receipt.to,
             contractAddress: CONTRACT_ADDRESS,
-            expectedEvent: "PetMinted(uint256,address)",
+            logsCount: receipt.logs.length,
+            allEvents: allEvents,
             allLogs: receipt.logs.map((log: any, index: number) => ({
               index,
               address: log.address,
+              addressMatches: log.address.toLowerCase() === CONTRACT_ADDRESS.toLowerCase(),
               topics: log.topics,
+              topicsCount: log.topics?.length || 0,
               data: log.data,
+              dataLength: log.data?.length || 0,
             })),
           });
           
           throw new Error(
-            "Token ID alınamadı. İşlem başarılı olabilir, ancak token ID tespit edilemedi. " +
-            "Lütfen blockchain explorer'da işlemi kontrol edin: " + receipt.hash
+            `Token ID alınamadı. İşlem başarılı (Hash: ${receipt.hash}), ancak token ID tespit edilemedi. ` +
+            `Lütfen blockchain explorer'da işlemi kontrol edin. ` +
+            `Bulunan event sayısı: ${allEvents.length}`
           );
         }
       } catch (receiptError: any) {
         // If receipt.wait() fails, the transaction might have reverted
         if (receiptError.receipt) {
-          console.error("Transaction reverted. Receipt:", receiptError.receipt);
+          console.error("❌ Transaction reverted. Receipt:", receiptError.receipt);
         }
         throw receiptError;
       }
