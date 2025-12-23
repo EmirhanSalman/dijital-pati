@@ -113,3 +113,4 @@ CREATE POLICY "Admins can delete any forum comment"
 -- - Konu silinince tüm yorumları da otomatik silinir (CASCADE)
 
 
+

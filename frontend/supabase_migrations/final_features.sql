@@ -117,3 +117,4 @@ GROUP BY user_id;
 -- - Kayıp hayvan bildirimi: reportFoundPet action'ı tarafından manuel oluşturulacak
 
 
+

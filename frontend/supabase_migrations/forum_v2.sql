@@ -114,3 +114,4 @@ FROM public.forum_posts fp;
 -- - Puan hesaplama için get_post_score() fonksiyonu kullanılabilir
 
 
+

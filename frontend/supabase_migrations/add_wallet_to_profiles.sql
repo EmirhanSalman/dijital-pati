@@ -19,3 +19,4 @@ CREATE INDEX IF NOT EXISTS idx_profiles_wallet_address ON public.profiles(wallet
 -- - reportFoundPet action'ı bu address ile kullanıcıyı bulacak
 
 
+

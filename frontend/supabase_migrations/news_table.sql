@@ -108,3 +108,4 @@ CREATE POLICY "Only admins can delete news"
 -- CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
 
+

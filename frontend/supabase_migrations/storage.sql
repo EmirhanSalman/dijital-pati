@@ -66,3 +66,4 @@ USING (
 -- - URL formatı: {SUPABASE_URL}/storage/v1/object/public/avatars/{user_id}/{filename}
 
 
+

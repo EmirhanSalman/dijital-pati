@@ -58,3 +58,4 @@ Eğer `hasServiceRoleKey: false` görüyorsanız:
 - Bu key tüm RLS politikalarını bypass eder, dikkatli kullanın!
 
 
+

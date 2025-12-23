@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ethers } from "ethers";
 import { motion } from "framer-motion";
 import {
   Upload,
@@ -25,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import DigitalPatiABI from "@/utils/DigitalPatiABI.json";
+import { useMintPet } from "@/hooks/useMintPet";
 import { CITIES as ALL_CITIES } from "@/constants/cities";
 
 // Pet türleri (FilterBar ile aynı)
@@ -39,14 +38,12 @@ const PET_TYPES = [
 // Şehirler (merkezi listeden, "all" hariç - create-pet sayfasında "Tümü" seçeneği yok)
 const CITIES = ALL_CITIES.map((city: string) => ({ value: city, label: city }));
 
-// TODO: Replace with actual contract address
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-
-type Step = "idle" | "uploading" | "approving" | "minting" | "saving" | "success" | "error";
+type Step = "idle" | "uploading" | "saving" | "success" | "error";
 
 export default function CreatePetPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { mint, status: mintStatus, error: mintError, tokenId: mintedTokenId } = useMintPet();
 
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -72,6 +69,7 @@ export default function CreatePetPage() {
     const checkWallet = async () => {
       if (typeof window.ethereum !== "undefined") {
         try {
+          const { ethers } = await import("ethers");
           const provider = new ethers.BrowserProvider(window.ethereum);
           const accounts = await provider.listAccounts();
           if (accounts.length > 0) {
@@ -115,6 +113,7 @@ export default function CreatePetPage() {
         );
       }
 
+      const { ethers } = await import("ethers");
       const provider = new ethers.BrowserProvider(window.ethereum);
       const accounts = await provider.send("eth_requestAccounts", []);
 
@@ -185,7 +184,7 @@ export default function CreatePetPage() {
     }
 
     try {
-      // Step 1: Upload Image to Supabase
+      // Step 1: Upload Image to Pinata (keep existing Pinata upload logic)
       setStep("uploading");
       const imageFormData = new FormData();
       imageFormData.append("image", selectedFile);
@@ -200,57 +199,36 @@ export default function CreatePetPage() {
         throw new Error(errorData.error || "Resim yüklenemedi.");
       }
 
-      const { url } = await uploadResponse.json();
-      setImageUrl(url);
+      const uploadData = await uploadResponse.json();
+      // Get IPFS hash from Pinata upload response (assuming it returns ipfsHash or hash)
+      const ipfsHash = uploadData.ipfsHash || uploadData.hash || uploadData.IpfsHash;
+      
+      if (!ipfsHash) {
+        throw new Error("IPFS hash alınamadı. Lütfen tekrar deneyin.");
+      }
 
-      // Step 2: Connect to Contract and Mint
-      setStep("approving");
+      // Prepend ipfs:// to the hash
+      const ipfsUri = `ipfs://${ipfsHash}`;
+      
+      // Store the image URL for database save (fallback to URL if provided)
+      const imageUrlForDb = uploadData.url || `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+      setImageUrl(imageUrlForDb);
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(
-        CONTRACT_ADDRESS,
-        DigitalPatiABI.abi,
-        signer
-      );
-
-      // Step 3: Mint NFT
-      setStep("minting");
-
-      // Use image URL as tokenURI (or create JSON metadata if preferred)
-      const tokenURI = url;
+      // Step 2: Mint NFT using useMintPet hook
       // Combine phone and email for blockchain (backwards compatible)
       const contactInfo = `${formData.phone ? `Tel: ${formData.phone}` : ""}${formData.phone && formData.email ? " | " : ""}${formData.email ? `Email: ${formData.email}` : ""}`;
 
-      const tx = await contract.mintPet(tokenURI, contactInfo);
-      const receipt = await tx.wait();
-
-      // Get tokenId from event
-      const iface = new ethers.Interface(DigitalPatiABI.abi);
-      const eventTopic = ethers.id("PetMinted(uint256,address)");
-      
-      let mintedTokenId: string | null = null;
-      
-      // Find the PetMinted event in the logs
-      for (const log of receipt.logs) {
-        if (log.topics[0] === eventTopic) {
-          try {
-            const decoded = iface.decodeEventLog("PetMinted", log.data, log.topics);
-            mintedTokenId = decoded.tokenId.toString();
-            break;
-          } catch (e) {
-            console.error("Error decoding event:", e);
-          }
-        }
-      }
+      const mintedTokenId = await mint(ipfsUri, contactInfo);
 
       if (!mintedTokenId) {
-        throw new Error("Token ID alınamadı. Lütfen tekrar deneyin.");
+        // Error is already set by the hook
+        setStep("error");
+        return;
       }
 
       setTokenId(mintedTokenId);
 
-      // Step 4: Save to Database
+      // Step 3: Save to Database
       setStep("saving");
 
       const saveResponse = await fetch("/api/pets/save", {
@@ -263,7 +241,7 @@ export default function CreatePetPage() {
           name: formData.name,
           breed: formData.breed,
           description: formData.description,
-          imageUrl: url,
+          imageUrl: imageUrlForDb,
           ownerAddress: walletAddress,
           phone: formData.phone || null,
           email: formData.email || null,
@@ -300,6 +278,8 @@ export default function CreatePetPage() {
 
       setStep("success");
 
+      setStep("success");
+
       // Redirect after 2 seconds
       setTimeout(() => {
         router.push(`/pet/${mintedTokenId}`);
@@ -319,13 +299,18 @@ export default function CreatePetPage() {
   };
 
   const getStepMessage = () => {
+    // Use mint status from hook if minting is in progress
+    if (mintStatus === "waiting-wallet") {
+      return "Cüzdan onayı bekleniyor...";
+    }
+    if (mintStatus === "minting") {
+      return "NFT oluşturuluyor...";
+    }
+
+    // Use local step for upload and save
     switch (step) {
       case "uploading":
         return "Resim yükleniyor...";
-      case "approving":
-        return "Cüzdan onayı bekleniyor...";
-      case "minting":
-        return "NFT oluşturuluyor...";
       case "saving":
         return "Kaydediliyor...";
       case "success":
@@ -648,10 +633,10 @@ export default function CreatePetPage() {
                 </div>
 
                 {/* Error Message */}
-                {error && (
+                {(error || mintError) && (
                   <div className="flex items-center gap-2 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">
                     <AlertCircle className="h-5 w-5" />
-                    <span>{error}</span>
+                    <span>{mintError || error}</span>
                   </div>
                 )}
 
@@ -670,19 +655,21 @@ export default function CreatePetPage() {
                   className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                   disabled={
                     !walletAddress ||
-                    step !== "idle" ||
+                    (step !== "idle" && step !== "error") ||
+                    (mintStatus !== "idle" && mintStatus !== "error") ||
                     !selectedFile ||
                     !formData.name ||
                     !formData.breed ||
                     (!formData.phone && !formData.email)
                   }
                 >
-                  {step !== "idle" && step !== "success" && step !== "error" ? (
+                  {(step !== "idle" && step !== "success" && step !== "error") || 
+                   (mintStatus !== "idle" && mintStatus !== "success" && mintStatus !== "error") ? (
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       {getStepMessage()}
                     </>
-                  ) : step === "success" ? (
+                  ) : step === "success" || mintStatus === "success" ? (
                     <>
                       <CheckCircle2 className="mr-2 h-5 w-5" />
                       Başarılı!
