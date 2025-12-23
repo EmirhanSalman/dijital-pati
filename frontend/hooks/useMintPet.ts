@@ -195,9 +195,9 @@ export function useMintPet(): UseMintPetReturn {
               if (typeof contract.totalSupply === "function") {
                 const totalSupply = await contract.totalSupply();
                 const totalSupplyBigInt = typeof totalSupply === "bigint" ? totalSupply : BigInt(totalSupply.toString());
-                if (totalSupplyBigInt > 0n) {
+                if (totalSupplyBigInt > BigInt(0)) {
                   // The new token ID would be totalSupply - 1 (0-indexed)
-                  mintedTokenId = (totalSupplyBigInt - 1n).toString();
+                  mintedTokenId = (totalSupplyBigInt - BigInt(1)).toString();
                   console.log("✅ Token ID extracted from totalSupply():", mintedTokenId);
                 }
               }
@@ -212,9 +212,9 @@ export function useMintPet(): UseMintPetReturn {
                   // Get the user's token count
                   const balance = await contract.balanceOf(userAddress);
                   const balanceBigInt = typeof balance === "bigint" ? balance : BigInt(balance.toString());
-                  if (balanceBigInt > 0n) {
+                  if (balanceBigInt > BigInt(0)) {
                     // Get the last token (most recently minted)
-                    const lastTokenIndex = balanceBigInt - 1n;
+                    const lastTokenIndex = balanceBigInt - BigInt(1);
                     const tokenId = await contract.tokenOfOwnerByIndex(userAddress, lastTokenIndex);
                     mintedTokenId = tokenId.toString();
                     console.log("✅ Token ID extracted from tokenOfOwnerByIndex():", mintedTokenId);
