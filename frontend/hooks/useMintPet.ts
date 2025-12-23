@@ -2,7 +2,15 @@ import { useState } from "react";
 import { ethers } from "ethers";
 import DigitalPatiABI from "@/utils/DigitalPatiABI.json";
 
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+// Get contract address from environment variable, with fallback for local development
+const getContractAddress = (): string => {
+  const address = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
+  if (!address) {
+    console.warn("⚠️ NEXT_PUBLIC_CONTRACT_ADDRESS not set, using default local address");
+    return "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+  }
+  return address;
+};
 
 export type MintStatus = "idle" | "waiting-wallet" | "minting" | "saving-db" | "success" | "error";
 
@@ -28,10 +36,14 @@ export function useMintPet(): UseMintPetReturn {
         throw new Error("MetaMask veya başka bir Web3 cüzdanı bulunamadı.");
       }
 
+      // Get contract address from environment variable
+      const contractAddress = getContractAddress();
+      console.log("📍 Using contract address:", contractAddress);
+
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(
-        CONTRACT_ADDRESS,
+        contractAddress,
         DigitalPatiABI.abi,
         signer
       );
@@ -64,7 +76,8 @@ export function useMintPet(): UseMintPetReturn {
           const log = receipt.logs[i];
           
           // Only process logs from our contract
-          if (log.address.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()) {
+          const contractAddress = getContractAddress();
+          if (log.address.toLowerCase() !== contractAddress.toLowerCase()) {
             continue;
           }
           
@@ -98,14 +111,15 @@ export function useMintPet(): UseMintPetReturn {
         const transferEventTopic = ethers.id("Transfer(address,address,uint256)");
         const zeroAddress = "0x0000000000000000000000000000000000000000";
         
+        const contractAddress = getContractAddress();
         console.log("🔍 Looking for ERC-721 Transfer event...");
         console.log("  Expected Transfer topic:", transferEventTopic);
-        console.log("  Contract address:", CONTRACT_ADDRESS);
+        console.log("  Contract address:", contractAddress);
         console.log("  User address:", userAddress);
         
         for (const log of receipt.logs) {
           // Only check logs from our contract
-          if (log.address.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()) {
+          if (log.address.toLowerCase() !== contractAddress.toLowerCase()) {
             continue;
           }
           
@@ -247,19 +261,20 @@ export function useMintPet(): UseMintPetReturn {
         
         // Final check - if still no tokenId, log everything for debugging
         if (!mintedTokenId) {
+          const contractAddress = getContractAddress();
           console.error("❌ Failed to extract tokenId. Full receipt details:", {
             transactionHash: receipt.hash,
             blockNumber: receipt.blockNumber,
             blockHash: receipt.blockHash,
             from: receipt.from,
             to: receipt.to,
-            contractAddress: CONTRACT_ADDRESS,
+            contractAddress: contractAddress,
             logsCount: receipt.logs.length,
             allEvents: allEvents,
             allLogs: receipt.logs.map((log: any, index: number) => ({
               index,
               address: log.address,
-              addressMatches: log.address.toLowerCase() === CONTRACT_ADDRESS.toLowerCase(),
+              addressMatches: log.address.toLowerCase() === contractAddress.toLowerCase(),
               topics: log.topics,
               topicsCount: log.topics?.length || 0,
               data: log.data,

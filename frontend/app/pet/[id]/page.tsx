@@ -25,7 +25,15 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
 
-const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+// Get contract address from environment variable, with fallback for local development
+const getContractAddress = (): string => {
+  const address = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
+  if (!address) {
+    console.warn("⚠️ NEXT_PUBLIC_CONTRACT_ADDRESS not set, using default local address");
+    return "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+  }
+  return address;
+};
 
 export default function PetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -125,8 +133,10 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       }
 
       // Fallback to blockchain
+      const contractAddress = getContractAddress();
+      console.log("📍 Using contract address:", contractAddress);
       const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, DigitalPatiABI.abi, provider);
+      const contract = new ethers.Contract(contractAddress, DigitalPatiABI.abi, provider);
 
       const status = await contract.getPetStatus(id);
       const owner = await contract.ownerOf(id);
