@@ -2,9 +2,11 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { uploadToPinata } from '@/lib/ipfs/pinata'
 
 /**
- * Pet resmini Supabase Storage'a yükler
+ * Pet resmini IPFS'e (Pinata) yükler
+ * Falls back to Supabase Storage if Pinata is not configured
  */
 export async function uploadPetImage(formData: FormData) {
   try {
@@ -35,12 +37,42 @@ export async function uploadPetImage(formData: FormData) {
       }
     }
 
-    // Dosya boyutunu kontrol et (10MB)
-    if (file.size > 10 * 1024 * 1024) {
+    // Dosya boyutunu kontrol et (100MB for Pinata, 10MB fallback)
+    const maxSize = 100 * 1024 * 1024 // 100MB
+    if (file.size > maxSize) {
       return {
-        error: 'Resim boyutu 10MB\'dan küçük olmalıdır.',
+        error: `Resim boyutu ${(maxSize / 1024 / 1024).toFixed(0)}MB'dan küçük olmalıdır.`,
       }
     }
+
+    // Try Pinata IPFS upload first
+    const hasPinataConfig =
+      process.env.NEXT_PUBLIC_PINATA_JWT ||
+      (process.env.NEXT_PUBLIC_PINATA_API_KEY && process.env.NEXT_PUBLIC_PINATA_SECRET_KEY)
+
+    if (hasPinataConfig) {
+      try {
+        console.log('🔄 Attempting Pinata IPFS upload...')
+        const pinataResult = await uploadToPinata(file)
+
+        return {
+          success: true,
+          ipfsHash: pinataResult.ipfsHash,
+          hash: pinataResult.ipfsHash, // Alias for compatibility
+          IpfsHash: pinataResult.ipfsHash, // Alias for compatibility
+          url: pinataResult.gatewayUrl, // Gateway URL for display
+          message: 'Resim başarıyla IPFS\'e yüklendi!',
+        }
+      } catch (pinataError: any) {
+        console.error('❌ Pinata upload failed, falling back to Supabase:', pinataError)
+        // Fall through to Supabase Storage fallback
+      }
+    } else {
+      console.warn('⚠️ Pinata credentials not found, using Supabase Storage fallback')
+    }
+
+    // Fallback to Supabase Storage if Pinata fails or is not configured
+    console.log('🔄 Using Supabase Storage fallback...')
 
     // Dosya adını oluştur
     const fileExt = file.name.split('.').pop()
@@ -66,13 +98,19 @@ export async function uploadPetImage(formData: FormData) {
       data: { publicUrl },
     } = supabase.storage.from('pet-images').getPublicUrl(fileName)
 
+    // Return Supabase URL (no IPFS hash available)
     return {
       success: true,
       url: publicUrl,
-      message: 'Resim başarıyla yüklendi!',
+      message: 'Resim başarıyla yüklendi! (Supabase Storage)',
+      // Note: No ipfsHash for Supabase Storage uploads
     }
   } catch (error: any) {
-    console.error('uploadPetImage error:', error)
+    console.error('uploadPetImage error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    })
     return {
       error: error.message || 'Resim yüklenirken bir hata oluştu.',
     }

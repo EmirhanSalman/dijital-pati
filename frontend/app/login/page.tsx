@@ -30,7 +30,31 @@ export default function LoginPage() {
       });
 
       if (signInError) {
-        setError(signInError.message || "Giriş yapılırken bir hata oluştu.");
+        // Provide more specific error messages
+        let errorMessage = signInError.message || "Giriş yapılırken bir hata oluştu.";
+        
+        // Handle common Supabase auth errors
+        if (signInError.status === 400) {
+          if (signInError.message?.includes("Invalid login credentials")) {
+            errorMessage = "Geçersiz e-posta veya şifre. Lütfen tekrar deneyin.";
+          } else if (signInError.message?.includes("Email not confirmed")) {
+            errorMessage = "E-posta adresiniz henüz doğrulanmamış. Lütfen e-postanızı kontrol edin.";
+          } else if (signInError.message?.includes("email")) {
+            errorMessage = "Geçersiz e-posta formatı.";
+          } else {
+            errorMessage = `Giriş hatası (400): ${signInError.message}`;
+          }
+        } else if (signInError.status === 429) {
+          errorMessage = "Çok fazla deneme yapıldı. Lütfen birkaç dakika sonra tekrar deneyin.";
+        }
+        
+        console.error("Supabase auth error:", {
+          status: signInError.status,
+          message: signInError.message,
+          name: signInError.name,
+        });
+        
+        setError(errorMessage);
         setLoading(false);
         return;
       }

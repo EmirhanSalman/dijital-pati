@@ -200,11 +200,29 @@ export default function CreatePetPage() {
       }
 
       const uploadData = await uploadResponse.json();
-      // Get IPFS hash from Pinata upload response (assuming it returns ipfsHash or hash)
-      const ipfsHash = uploadData.ipfsHash || uploadData.hash || uploadData.IpfsHash;
+      
+      // Log full response for debugging
+      console.log("📦 Upload response:", uploadData);
+      
+      // Get IPFS hash from Pinata upload response
+      // Try multiple possible field names (Pinata can return different formats)
+      const ipfsHash =
+        uploadData.ipfsHash ||
+        uploadData.hash ||
+        uploadData.IpfsHash ||
+        uploadData.cid ||
+        uploadData.CID;
+      
+      console.log("🔍 Extracted IPFS hash:", ipfsHash || "NOT FOUND");
+      console.log("📋 Full upload response keys:", Object.keys(uploadData));
       
       if (!ipfsHash) {
-        throw new Error("IPFS hash alınamadı. Lütfen tekrar deneyin.");
+        // Provide detailed error with response structure
+        console.error("❌ IPFS hash extraction failed. Response structure:", uploadData);
+        throw new Error(
+          `IPFS hash alınamadı. Yanıt yapısı: ${JSON.stringify(uploadData)}. ` +
+          `Lütfen Pinata yapılandırmasını kontrol edin veya tekrar deneyin.`
+        );
       }
 
       // Prepend ipfs:// to the hash

@@ -84,7 +84,31 @@ export default function RegisterPage() {
       });
 
       if (signUpError) {
-        setError(signUpError.message || "Kayıt olurken bir hata oluştu.");
+        // Provide more specific error messages
+        let errorMessage = signUpError.message || "Kayıt olurken bir hata oluştu.";
+        
+        // Handle common Supabase auth errors
+        if (signUpError.status === 400) {
+          if (signUpError.message?.includes("User already registered")) {
+            errorMessage = "Bu e-posta adresi zaten kayıtlı. Lütfen giriş yapın.";
+          } else if (signUpError.message?.includes("Password")) {
+            errorMessage = "Şifre gereksinimleri karşılanmıyor. Lütfen şifre kurallarını kontrol edin.";
+          } else if (signUpError.message?.includes("email")) {
+            errorMessage = "Geçersiz e-posta formatı.";
+          } else {
+            errorMessage = `Kayıt hatası (400): ${signUpError.message}`;
+          }
+        } else if (signUpError.status === 429) {
+          errorMessage = "Çok fazla deneme yapıldı. Lütfen birkaç dakika sonra tekrar deneyin.";
+        }
+        
+        console.error("Supabase auth error:", {
+          status: signUpError.status,
+          message: signUpError.message,
+          name: signUpError.name,
+        });
+        
+        setError(errorMessage);
         setLoading(false);
         return;
       }
