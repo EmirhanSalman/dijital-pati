@@ -205,15 +205,24 @@ export function useMintPet(): UseMintPetReturn {
           
           try {
             // Try to get totalSupply (if contract supports it)
+            // This is a fallback: totalSupply() returns the count, so the latest token ID is totalSupply - 1
             try {
               if (typeof contract.totalSupply === "function") {
                 const totalSupply = await contract.totalSupply();
                 const totalSupplyBigInt = typeof totalSupply === "bigint" ? totalSupply : BigInt(totalSupply.toString());
+                console.log("📊 Contract totalSupply:", totalSupplyBigInt.toString());
+                
                 if (totalSupplyBigInt > BigInt(0)) {
-                  // The new token ID would be totalSupply - 1 (0-indexed)
+                  // The new token ID would be totalSupply - 1 (since tokens are 0-indexed)
+                  // Example: If totalSupply is 9, the latest token ID is 8
                   mintedTokenId = (totalSupplyBigInt - BigInt(1)).toString();
-                  console.log("✅ Token ID extracted from totalSupply():", mintedTokenId);
+                  console.log("✅ Token ID extracted from totalSupply() fallback:", mintedTokenId);
+                  console.log("⚠️ Using fallback method - verify this matches the actual minted token ID");
+                } else {
+                  console.warn("⚠️ totalSupply() returned 0, cannot determine token ID");
                 }
+              } else {
+                console.log("ℹ️ totalSupply() function not available in contract");
               }
             } catch (totalSupplyError: any) {
               console.log("ℹ️ totalSupply() not available or failed:", totalSupplyError.message);
@@ -296,9 +305,18 @@ export function useMintPet(): UseMintPetReturn {
         throw receiptError;
       }
 
+      // Validate tokenId before returning
+      if (!mintedTokenId || mintedTokenId === "null" || mintedTokenId === "undefined") {
+        throw new Error("Token ID is invalid or missing. Cannot proceed with database save.");
+      }
+
+      // Log the exact tokenId that will be saved to database
+      console.log("✅ Mint successful! Blockchain Token ID (will be saved to DB as token_id):", mintedTokenId);
+      console.log("📝 Token ID type:", typeof mintedTokenId);
+      console.log("📝 Token ID value:", JSON.stringify(mintedTokenId));
+
       setTokenId(mintedTokenId);
       setStatus("success");
-      console.log("✅ Mint successful! Token ID:", mintedTokenId);
       return mintedTokenId;
     } catch (err: any) {
       console.error("Mint error:", err);

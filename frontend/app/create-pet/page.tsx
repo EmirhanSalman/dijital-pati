@@ -244,6 +244,17 @@ export default function CreatePetPage() {
         return;
       }
 
+      // Validate tokenId before saving to database
+      if (!mintedTokenId || mintedTokenId === "null" || mintedTokenId === "undefined") {
+        console.error("❌ Invalid tokenId received from mint function:", mintedTokenId);
+        setError("Geçersiz token ID alındı. Lütfen tekrar deneyin.");
+        setStep("error");
+        return;
+      }
+
+      console.log("💾 Preparing to save to database with token_id:", mintedTokenId);
+      console.log("📋 Token ID source: Blockchain receipt (ERC-721 Transfer event or fallback)");
+
       setTokenId(mintedTokenId);
 
       // Step 3: Save to Database
@@ -255,7 +266,7 @@ export default function CreatePetPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tokenId: mintedTokenId,
+          tokenId: mintedTokenId, // This is the EXACT token_id from blockchain
           name: formData.name,
           breed: formData.breed,
           description: formData.description,

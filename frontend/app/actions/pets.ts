@@ -146,10 +146,35 @@ export async function savePetToDatabase(data: {
       }
     }
 
+    // Validate tokenId is provided and is a valid string/number
+    if (!data.tokenId) {
+      console.error("❌ savePetToDatabase: tokenId is missing!");
+      return {
+        error: "Token ID (tokenId) is required and must come from blockchain receipt.",
+      };
+    }
+
+    // Convert tokenId to string to ensure consistency
+    const tokenIdString = String(data.tokenId).trim();
+    
+    if (!tokenIdString || tokenIdString === "null" || tokenIdString === "undefined") {
+      console.error("❌ savePetToDatabase: Invalid tokenId value:", data.tokenId);
+      return {
+        error: "Invalid token ID. Token ID must come directly from blockchain receipt.",
+      };
+    }
+
+    console.log("💾 Saving pet to database:");
+    console.log("  📍 token_id (from blockchain):", tokenIdString);
+    console.log("  📍 name:", data.name);
+    console.log("  📍 owner_address:", data.ownerAddress);
+    console.log("  ⚠️ Note: DB 'id' (auto-increment) will differ from 'token_id' (blockchain)");
+
     // Pets tablosuna kaydet (eğer varsa)
     // Use contact_phone and contact_email if available, fallback to contact_info for backwards compatibility
+    // IMPORTANT: token_id comes from blockchain, NOT from any local counter
     const insertData: any = {
-      token_id: data.tokenId,
+      token_id: tokenIdString, // EXACT value from blockchain receipt
       name: data.name,
       breed: data.breed,
       description: data.description,

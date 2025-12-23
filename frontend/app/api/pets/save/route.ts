@@ -13,6 +13,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate tokenId explicitly - it MUST come from blockchain receipt
+    const tokenIdString = String(body.tokenId).trim();
+    if (!tokenIdString || tokenIdString === "null" || tokenIdString === "undefined") {
+      console.error("❌ API: Invalid tokenId in request:", body.tokenId);
+      return NextResponse.json(
+        { error: "Geçersiz tokenId. Token ID blockchain receipt'ten gelmelidir." },
+        { status: 400 }
+      );
+    }
+
+    console.log("📥 API: Saving pet with token_id from blockchain:", tokenIdString);
+    console.log("📋 Request body tokenId:", body.tokenId, "→ Normalized:", tokenIdString);
+
     // At least one contact method is required
     if (!body.phone && !body.email && !body.contactInfo) {
       return NextResponse.json(
