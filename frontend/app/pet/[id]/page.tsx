@@ -24,7 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
-import { getContract } from "@/utils/web3";
+import { getContract, getReadOnlyProvider } from "@/utils/web3";
 
 // Get contract address from environment variable, with fallback for local development
 const getContractAddress = (): string => {
@@ -137,19 +137,8 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       const contractAddress = getContractAddress();
       console.log("📍 Using contract address:", contractAddress);
       
-      // Always use JsonRpcProvider for read-only operations to ensure it works
-      // for users without wallets. Use NEXT_PUBLIC_RPC_URL from environment.
-      const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
-      if (!rpcUrl || rpcUrl.trim() === "") {
-        console.error("❌ NEXT_PUBLIC_RPC_URL is not configured in environment variables.");
-        throw new Error(
-          "Blockchain RPC URL is not configured. Please set NEXT_PUBLIC_RPC_URL in your environment variables. " +
-          "For Sepolia testnet, use: https://sepolia.infura.io/v3/YOUR_KEY or https://rpc.sepolia.org"
-        );
-      }
-      
-      console.log("📍 Using RPC URL:", rpcUrl.replace(/\/\/.*@/, "//***@") ); // Log without exposing API keys
-      const provider = new ethers.JsonRpcProvider(rpcUrl.trim());
+      // Use getReadOnlyProvider which handles RPC URL fallback and error handling
+      const provider = getReadOnlyProvider();
       const contract = getContract(provider, DigitalPatiABI.abi);
 
       const status = await contract.getPetStatus(id);
