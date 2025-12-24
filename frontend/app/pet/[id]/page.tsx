@@ -40,7 +40,7 @@ const getContractAddress = (): string => {
  * Converts IPFS URLs to gateway URLs for fetching
  * - If URL starts with 'ipfs://', converts to gateway URL
  * - If URL already starts with 'http', returns as is
- * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to Cloudflare IPFS gateway (faster for global users)
+ * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to official IPFS gateway (reliable and fast)
  */
 const getGatewayUrl = (url: string): string => {
   // If already an HTTP URL, return as is
@@ -51,7 +51,10 @@ const getGatewayUrl = (url: string): string => {
   // If IPFS URL, convert to gateway URL
   if (url.startsWith('ipfs://')) {
     const ipfsHash = url.replace('ipfs://', '');
-    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://cloudflare-ipfs.com/ipfs/';
+    // Use NEXT_PUBLIC_GATEWAY_URL if configured, otherwise use Cloudflare IPFS gateway
+    // Cloudflare gateway: https://ipfs.cloudflare-ipfs.com/ipfs/ (fast CDN)
+    // Alternative: https://dweb.link/ipfs/ or https://ipfs.io/ipfs/
+    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://ipfs.cloudflare-ipfs.com/ipfs/';
     // Ensure gateway URL ends with /
     const baseUrl = gatewayUrl.endsWith('/') ? gatewayUrl : `${gatewayUrl}/`;
     return `${baseUrl}${ipfsHash}`;
