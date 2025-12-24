@@ -40,7 +40,7 @@ const getContractAddress = (): string => {
  * Converts IPFS URLs to gateway URLs for fetching
  * - If URL starts with 'ipfs://', converts to gateway URL
  * - If URL already starts with 'http', returns as is
- * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to official IPFS gateway (reliable and fast)
+ * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to dweb.link (stable and fast)
  */
 const getGatewayUrl = (url: string): string => {
   // If already an HTTP URL, return as is
@@ -51,17 +51,61 @@ const getGatewayUrl = (url: string): string => {
   // If IPFS URL, convert to gateway URL
   if (url.startsWith('ipfs://')) {
     const ipfsHash = url.replace('ipfs://', '');
-    // Use NEXT_PUBLIC_GATEWAY_URL if configured, otherwise use Cloudflare IPFS gateway
-    // Cloudflare gateway: https://ipfs.cloudflare-ipfs.com/ipfs/ (fast CDN)
-    // Alternative: https://dweb.link/ipfs/ or https://ipfs.io/ipfs/
-    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://ipfs.cloudflare-ipfs.com/ipfs/';
+    // Use NEXT_PUBLIC_GATEWAY_URL if configured, otherwise use dweb.link
+    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://dweb.link/ipfs/';
     // Ensure gateway URL ends with /
     const baseUrl = gatewayUrl.endsWith('/') ? gatewayUrl : `${gatewayUrl}/`;
+    // Form URL correctly: https://dweb.link/ipfs/CID
     return `${baseUrl}${ipfsHash}`;
   }
 
   // If neither, return as is (might be a relative path or other format)
   return url;
+};
+
+/**
+ * Fetches from IPFS with fallback to alternative gateway if first attempt fails
+ */
+const fetchFromIpfsWithFallback = async (url: string): Promise<Response | null> => {
+  // If already HTTP URL, fetch directly
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      return await fetch(url);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // If IPFS URL, try primary gateway first, then fallback
+  if (url.startsWith('ipfs://')) {
+    const ipfsHash = url.replace('ipfs://', '');
+    
+    // Primary gateway: dweb.link
+    const primaryGateway = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://dweb.link/ipfs/';
+    const primaryUrl = `${primaryGateway.endsWith('/') ? primaryGateway : `${primaryGateway}/`}${ipfsHash}`;
+    
+    try {
+      const response = await fetch(primaryUrl);
+      if (response.ok) {
+        return response;
+      }
+    } catch (e) {
+      console.log('Primary gateway failed, trying fallback...', e);
+    }
+
+    // Fallback gateway: ipfs.io
+    const fallbackGateway = 'https://ipfs.io/ipfs/';
+    const fallbackUrl = `${fallbackGateway}${ipfsHash}`;
+    
+    try {
+      return await fetch(fallbackUrl);
+    } catch (e) {
+      console.log('Fallback gateway also failed', e);
+      return null;
+    }
+  }
+
+  return null;
 };
 
 export default function PetPage({ params }: { params: Promise<{ id: string }> }) {
@@ -71,6 +115,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   const [blockchainData, setBlockchainData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadingFromBlockchain, setLoadingFromBlockchain] = useState(false);
   const [ownerAddress, setOwnerAddress] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [currentUserAddress, setCurrentUserAddress] = useState<string | null>(null);
@@ -156,12 +201,19 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
 
           setLoading(false);
           return;
+        } else if (response.status === 404) {
+          // If 404, show loading message and try blockchain
+          console.log("Pet not found in database, loading from blockchain...");
+          setError(null); // Clear any previous errors
+          setLoadingFromBlockchain(true); // Show loading message
+          // Continue to blockchain fallback below
         }
       } catch (supabaseError) {
         console.log("Supabase fetch failed, trying blockchain:", supabaseError);
       }
 
       // Fallback to blockchain - Use read-only provider (works without wallet)
+      setLoadingFromBlockchain(true);
       const contractAddress = getContractAddress();
       console.log("📍 Using contract address:", contractAddress);
       
@@ -176,12 +228,10 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       let finalName = `Pati #${id}`;
       let finalImage = tokenURI;
 
-      // Convert IPFS URL to gateway URL for fetching
-      const gatewayTokenURI = getGatewayUrl(tokenURI);
-
+      // Fetch metadata with gateway fallback
       try {
-        const res = await fetch(gatewayTokenURI);
-        if (res.ok) {
+        const res = await fetchFromIpfsWithFallback(tokenURI);
+        if (res && res.ok) {
           const contentType = res.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
             const meta = await res.json();
@@ -189,6 +239,9 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
             // Convert image URL to gateway URL if it's an IPFS URL
             finalImage = meta.image ? getGatewayUrl(meta.image) : getGatewayUrl(tokenURI);
           }
+        } else {
+          // If metadata fetch fails, ensure image URL is converted to gateway URL
+          finalImage = getGatewayUrl(tokenURI);
         }
       } catch (e) {
         console.log("Metadata okunamadı", e);
@@ -204,6 +257,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
         contact: status[1],
       });
       setOwnerAddress(owner);
+      setLoadingFromBlockchain(false); // Successfully loaded from blockchain
 
       // Check if current user is owner
       if (currentUserAddress && owner.toLowerCase() === currentUserAddress) {
@@ -212,6 +266,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
         setIsOwner(false);
       }
     } catch (err: any) {
+      setLoadingFromBlockchain(false); // Stop loading indicator on error
       console.error("Fetch pet error:", err);
       const errorMessage = err.message || JSON.stringify(err);
       
@@ -335,11 +390,15 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       }
     : null;
 
-  if (loading) {
+  if (loading || loadingFromBlockchain) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <Loader2 className="animate-spin w-10 h-10 text-blue-600" />
-        <p className="text-gray-500">Veriler yükleniyor...</p>
+        <p className="text-gray-500">
+          {loadingFromBlockchain 
+            ? "Pet veritabanında bulunamadı, blockchain'den yükleniyor..." 
+            : "Veriler yükleniyor..."}
+        </p>
       </div>
     );
   }
