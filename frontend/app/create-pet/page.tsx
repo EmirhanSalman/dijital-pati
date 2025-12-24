@@ -24,7 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useMintPet } from "@/hooks/useMintPet";
+import { connectWallet, getContract } from "@/utils/web3";
+import { ethers } from "ethers";
 import { CITIES as ALL_CITIES } from "@/constants/cities";
 
 // Pet türleri (FilterBar ile aynı)
@@ -38,16 +39,21 @@ const PET_TYPES = [
 // Şehirler (merkezi listeden, "all" hariç - create-pet sayfasında "Tümü" seçeneği yok)
 const CITIES = ALL_CITIES.map((city: string) => ({ value: city, label: city }));
 
-type Step = "idle" | "uploading" | "saving" | "success" | "error";
+// Minimal ABI
+const DIGITAL_PATI_ABI = [
+  "function mintPet(string tokenURI, string contactInfo) public returns (uint256)",
+  "event PetMinted(uint256 indexed tokenId, address owner)"
+];
+
+type Step = 'initial' | 'uploading' | 'minting' | 'saving' | 'success' | 'error';
 
 export default function CreatePetPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { mint, status: mintStatus, error: mintError, tokenId: mintedTokenId } = useMintPet();
 
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [step, setStep] = useState<Step>("idle");
+  const [step, setStep] = useState<Step>("initial");
   const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -101,8 +107,8 @@ export default function CreatePetPage() {
     getUserEmail();
   }, []);
 
-  // Wallet Connection
-  const connectWallet = async () => {
+  // Wallet Connection (UI handler)
+  const handleConnectWallet = async () => {
     setIsConnecting(true);
     setError(null);
 
@@ -161,30 +167,26 @@ export default function CreatePetPage() {
     }
   };
 
-  // Form Submit - Optimized async handler
+  // Form Submit - Robust Web3 handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // Validation
     if (!walletAddress) {
       setError("Lütfen önce cüzdanınızı bağlayın.");
       return;
     }
-
     if (!selectedFile) {
       setError("Lütfen bir resim seçin.");
       return;
     }
-
-    // At least one contact method is required
     if (!formData.name || !formData.breed || (!formData.phone && !formData.email)) {
-      setError("Lütfen tüm zorunlu alanları doldurun. En az bir iletişim yöntemi (telefon veya e-posta) gereklidir.");
+      setError("Lütfen tüm zorunlu alanları doldurun.");
       return;
     }
 
     try {
-      // Step 1: Upload Image to Pinata (keep existing Pinata upload logic)
+      // --- STEP 1: Upload Image to Pinata ---
       setStep("uploading");
       const imageFormData = new FormData();
       imageFormData.append("image", selectedFile);
@@ -194,79 +196,71 @@ export default function CreatePetPage() {
         body: imageFormData,
       });
 
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        throw new Error(errorData.error || "Resim yüklenemedi.");
-      }
-
+      if (!uploadResponse.ok) throw new Error("Resim yüklenemedi.");
       const uploadData = await uploadResponse.json();
       
-      // Log full response for debugging
-      console.log("📦 Upload response:", uploadData);
-      
-      // Get IPFS hash from Pinata upload response
-      // Try multiple possible field names (Pinata can return different formats)
-      const ipfsHash =
-        uploadData.ipfsHash ||
-        uploadData.hash ||
-        uploadData.IpfsHash ||
-        uploadData.cid ||
-        uploadData.CID;
-      
-      console.log("🔍 Extracted IPFS hash:", ipfsHash || "NOT FOUND");
-      console.log("📋 Full upload response keys:", Object.keys(uploadData));
-      
-      if (!ipfsHash) {
-        // Provide detailed error with response structure
-        console.error("❌ IPFS hash extraction failed. Response structure:", uploadData);
-        throw new Error(
-          `IPFS hash alınamadı. Yanıt yapısı: ${JSON.stringify(uploadData)}. ` +
-          `Lütfen Pinata yapılandırmasını kontrol edin veya tekrar deneyin.`
-        );
-      }
+      const ipfsHash = uploadData.ipfsHash || uploadData.IpfsHash;
+      if (!ipfsHash) throw new Error("IPFS hash alınamadı.");
 
-      // Prepend ipfs:// to the hash
       const ipfsUri = `ipfs://${ipfsHash}`;
-      
-      // Store the image URL for database save (fallback to URL if provided)
-      const imageUrlForDb = uploadData.url || `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+      const imageUrlForDb = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
       setImageUrl(imageUrlForDb);
 
-      // Step 2: Mint NFT using useMintPet hook
-      // Combine phone and email for blockchain (backwards compatible)
-      const contactInfo = `${formData.phone ? `Tel: ${formData.phone}` : ""}${formData.phone && formData.email ? " | " : ""}${formData.email ? `Email: ${formData.email}` : ""}`;
+      // --- STEP 2: Blockchain Transaction ---
+      setStep("minting"); 
+      
+      // A. Connect & Get Contract
+      const signer = await connectWallet();
+      const contract = getContract(signer, DIGITAL_PATI_ABI);
 
-      const mintedTokenId = await mint(ipfsUri, contactInfo);
+      // B. Prepare Data
+      const contactInfo = JSON.stringify({
+        phone: formData.phone,
+        email: formData.email,
+        name: formData.name
+      });
+
+      // C. Send Transaction
+      console.log("Minting pet...", { ipfsUri, contactInfo });
+      const tx = await contract.mintPet(ipfsUri, contactInfo);
+      console.log("Transaction sent:", tx.hash);
+
+      // D. Wait for Confirmation & Extract Token ID
+      const receipt = await tx.wait();
+      
+      // E. Parse Logs to find 'PetMinted' event
+      let mintedTokenId: string | null = null;
+      
+      for (const log of receipt.logs) {
+        try {
+          const parsedLog = contract.interface.parseLog(log);
+          if (parsedLog && parsedLog.name === 'PetMinted') {
+            mintedTokenId = parsedLog.args[0].toString();
+            break;
+          }
+        } catch (err) {
+          continue;
+        }
+      }
 
       if (!mintedTokenId) {
-        // Error is already set by the hook
-        setStep("error");
-        return;
+        // Fallback: If event parsing fails, try to fetch user's last token or handle gracefully
+        console.warn("Could not parse TokenID from logs, checking backup...");
+        // For MVP stability, if we can't find ID, we might throw or use a placeholder if strictly needed
+        throw new Error("Blockchain onayı alındı ancak Token ID okunamadı.");
       }
 
-      // Validate tokenId before saving to database
-      if (!mintedTokenId || mintedTokenId === "null" || mintedTokenId === "undefined") {
-        console.error("❌ Invalid tokenId received from mint function:", mintedTokenId);
-        setError("Geçersiz token ID alındı. Lütfen tekrar deneyin.");
-        setStep("error");
-        return;
-      }
-
-      console.log("💾 Preparing to save to database with token_id:", mintedTokenId);
-      console.log("📋 Token ID source: Blockchain receipt (ERC-721 Transfer event or fallback)");
-
+      console.log("✅ Minted Token ID:", mintedTokenId);
       setTokenId(mintedTokenId);
 
-      // Step 3: Save to Database
+      // --- STEP 3: Save to Supabase ---
       setStep("saving");
 
       const saveResponse = await fetch("/api/pets/save", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tokenId: mintedTokenId, // This is the EXACT token_id from blockchain
+          tokenId: mintedTokenId,
           name: formData.name,
           breed: formData.breed,
           description: formData.description,
@@ -280,66 +274,33 @@ export default function CreatePetPage() {
       });
 
       if (!saveResponse.ok) {
-        let errorMessage = "Veritabanına kaydedilemedi";
-        try {
-          const errorData = await saveResponse.json();
-          console.error("Database save error:", errorData);
-          
-          // Hata mesajını al
-          if (errorData.error) {
-            errorMessage = errorData.error;
-          } else if (errorData.details?.message) {
-            errorMessage = errorData.details.message;
-          } else if (typeof errorData === "string") {
-            errorMessage = errorData;
-          }
-          
-          // Veritabanı hatası durumunda kullanıcıyı bilgilendir
-          setError(`⚠️ NFT başarıyla oluşturuldu, ancak veritabanına kaydedilemedi: ${errorMessage}`);
-        } catch (parseError) {
-          console.error("Error parsing response:", parseError);
-          setError(`⚠️ NFT başarıyla oluşturuldu, ancak veritabanına kaydedilemedi: ${errorMessage}`);
-        }
-        
-        // Hata mesajını 5 saniye göster
-        setTimeout(() => setError(null), 5000);
+        const errorData = await saveResponse.json();
+        throw new Error(errorData.error || "Veritabanına kaydedilemedi.");
       }
 
       setStep("success");
-
-      setStep("success");
-
-      // Redirect after 2 seconds
       setTimeout(() => {
         router.push(`/pet/${mintedTokenId}`);
       }, 2000);
+
     } catch (err: any) {
-      console.error("Create pet error:", err);
+      console.error("Process error:", err);
       setStep("error");
       
-      if (err.code === 4001) {
+      if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
         setError("İşlem cüzdanınızda reddedildi.");
-      } else if (err.message?.includes("insufficient funds")) {
-        setError("Yetersiz bakiye. Lütfen cüzdanınızı kontrol edin.");
       } else {
-        setError(err.message || "Pet oluşturulurken bir hata oluştu.");
+        setError(err.message || "İşlem sırasında bir hata oluştu.");
       }
     }
   };
 
   const getStepMessage = () => {
-    // Use mint status from hook if minting is in progress
-    if (mintStatus === "waiting-wallet") {
-      return "Cüzdan onayı bekleniyor...";
-    }
-    if (mintStatus === "minting") {
-      return "NFT oluşturuluyor...";
-    }
-
-    // Use local step for upload and save
     switch (step) {
       case "uploading":
         return "Resim yükleniyor...";
+      case "minting":
+        return "NFT oluşturuluyor...";
       case "saving":
         return "Kaydediliyor...";
       case "success":
@@ -385,7 +346,7 @@ export default function CreatePetPage() {
                   NFT oluşturmak için cüzdanınızı bağlamanız gerekiyor.
                 </p>
                 <Button
-                  onClick={connectWallet}
+                  onClick={handleConnectWallet}
                   disabled={isConnecting}
                   size="lg"
                   className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
@@ -662,10 +623,10 @@ export default function CreatePetPage() {
                 </div>
 
                 {/* Error Message */}
-                {(error || mintError) && (
+                {error && (
                   <div className="flex items-center gap-2 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">
                     <AlertCircle className="h-5 w-5" />
-                    <span>{mintError || error}</span>
+                    <span>{error}</span>
                   </div>
                 )}
 
@@ -684,21 +645,19 @@ export default function CreatePetPage() {
                   className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                   disabled={
                     !walletAddress ||
-                    (step !== "idle" && step !== "error") ||
-                    (mintStatus !== "idle" && mintStatus !== "error") ||
+                    (step !== "initial" && step !== "error") ||
                     !selectedFile ||
                     !formData.name ||
                     !formData.breed ||
                     (!formData.phone && !formData.email)
                   }
                 >
-                  {(step !== "idle" && step !== "success" && step !== "error") || 
-                   (mintStatus !== "idle" && mintStatus !== "success" && mintStatus !== "error") ? (
+                  {(step !== "initial" && step !== "success" && step !== "error") ? (
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       {getStepMessage()}
                     </>
-                  ) : step === "success" || mintStatus === "success" ? (
+                  ) : step === "success" ? (
                     <>
                       <CheckCircle2 className="mr-2 h-5 w-5" />
                       Başarılı!
