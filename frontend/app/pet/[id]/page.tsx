@@ -36,6 +36,31 @@ const getContractAddress = (): string => {
   return address;
 };
 
+/**
+ * Converts IPFS URLs to gateway URLs for fetching
+ * - If URL starts with 'ipfs://', converts to gateway URL
+ * - If URL already starts with 'http', returns as is
+ * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to Pinata gateway
+ */
+const getGatewayUrl = (url: string): string => {
+  // If already an HTTP URL, return as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+
+  // If IPFS URL, convert to gateway URL
+  if (url.startsWith('ipfs://')) {
+    const ipfsHash = url.replace('ipfs://', '');
+    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://gateway.pinata.cloud/ipfs/';
+    // Ensure gateway URL ends with /
+    const baseUrl = gatewayUrl.endsWith('/') ? gatewayUrl : `${gatewayUrl}/`;
+    return `${baseUrl}${ipfsHash}`;
+  }
+
+  // If neither, return as is (might be a relative path or other format)
+  return url;
+};
+
 export default function PetPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
 
@@ -148,18 +173,24 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       let finalName = `Pati #${id}`;
       let finalImage = tokenURI;
 
+      // Convert IPFS URL to gateway URL for fetching
+      const gatewayTokenURI = getGatewayUrl(tokenURI);
+
       try {
-        const res = await fetch(tokenURI);
+        const res = await fetch(gatewayTokenURI);
         if (res.ok) {
           const contentType = res.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
             const meta = await res.json();
             finalName = meta.name || finalName;
-            finalImage = meta.image || tokenURI;
+            // Convert image URL to gateway URL if it's an IPFS URL
+            finalImage = meta.image ? getGatewayUrl(meta.image) : getGatewayUrl(tokenURI);
           }
         }
       } catch (e) {
         console.log("Metadata okunamadı", e);
+        // If metadata fetch fails, ensure image URL is converted to gateway URL
+        finalImage = getGatewayUrl(tokenURI);
       }
 
       setBlockchainData({
@@ -283,7 +314,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     ? {
         id: petData.token_id,
         name: getPetName(),
-        image: petData.image_url,
+        image: getGatewayUrl(petData.image_url || ""), // Convert IPFS URLs to gateway URLs
         isLost: petData.is_lost,
         phone: getContactPhone(),
         email: getContactEmail(),
@@ -295,6 +326,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     ? {
         ...blockchainData,
         name: getPetName(),
+        image: getGatewayUrl(blockchainData.image || ""), // Convert IPFS URLs to gateway URLs
         phone: null,
         email: null,
       }
