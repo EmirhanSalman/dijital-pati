@@ -278,9 +278,16 @@ export default function CreatePetPage() {
         throw new Error(errorData.error || "Veritabanına kaydedilemedi.");
       }
 
+      const saveData = await saveResponse.json();
+      const petId = saveData.data?.id;
+
+      if (!petId) {
+        throw new Error("Pet kaydedildi ancak ID alınamadı.");
+      }
+
       setStep("success");
       setTimeout(() => {
-        router.push(`/pet/${mintedTokenId}`);
+        router.push(`/pet/${petId}`);
       }, 2000);
 
     } catch (err: any) {

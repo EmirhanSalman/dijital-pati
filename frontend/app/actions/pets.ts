@@ -204,9 +204,11 @@ export async function savePetToDatabase(data: {
       insertData.district = data.district.trim();
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('pets')
-      .insert(insertData)
+      .insert([insertData])
+      .select()
+      .single()
 
     if (error) {
       console.error('savePetToDatabase error:', error)
@@ -243,6 +245,7 @@ export async function savePetToDatabase(data: {
     return {
       success: true,
       message: 'Pet başarıyla kaydedildi!',
+      data: data, // Return the created record with id
     }
   } catch (error: any) {
     console.error('savePetToDatabase error:', error)

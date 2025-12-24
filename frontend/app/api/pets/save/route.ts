@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: statusCode });
     }
 
-    return NextResponse.json({ success: true, message: result.message });
+    return NextResponse.json({ success: true, data: result.data });
   } catch (error: any) {
     console.error("Save API Error:", error);
     console.error("Error details:", {
