@@ -97,8 +97,13 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
     setLoading(true);
 
     try {
+      // STRICT TYPE SAFETY: Explicitly convert to String.
+      // This handles the union type where token_id might be a number (Blockchain) 
+      // or id might be a UUID string (Database).
+      const petId = String(pet.token_id || pet.id);
+
       const result = await sendContactEmail({
-        petId: pet.token_id || pet.id,
+        petId,
         petName: petName,
         ownerEmail: ownerEmail,
         finderName: formData.finderName.trim(),
@@ -126,7 +131,8 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
         }, 2000);
       }
     } catch (err: any) {
-      setError(err.message || "Bir hata oluştu. Lütfen tekrar deneyin.");
+      console.error('Contact form error:', err);
+      setError(err.message || "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.");
     } finally {
       setLoading(false);
     }
