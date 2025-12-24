@@ -33,6 +33,7 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
   const [formData, setFormData] = useState({
     finderName: "",
     finderPhone: "",
+    email: "",
     message: "",
     shareLocation: false,
   });
@@ -84,13 +85,18 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
       return;
     }
 
+    if (!formData.email.trim()) {
+      setError("Lütfen e-posta adresinizi girin.");
+      return;
+    }
+
     if (!formData.message.trim()) {
       setError("Lütfen bir mesaj yazın.");
       return;
     }
 
-    if (!ownerEmail) {
-      setError("Hayvan sahibinin e-posta adresi bulunamadı.");
+    if (!pet.owner_id) {
+      setError("Hayvan sahibi bilgisi bulunamadı.");
       return;
     }
 
@@ -104,22 +110,18 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
 
       const result = await sendContactEmail({
         petId,
-        petName: petName,
-        ownerEmail: ownerEmail,
-        finderName: formData.finderName.trim(),
-        finderPhone: formData.finderPhone.trim(),
+        ownerId: pet.owner_id,
+        senderEmail: formData.email.trim(),
         message: formData.message.trim(),
-        location: formData.shareLocation && location ? location : null,
       });
 
-      if (result.error) {
-        setError(result.error);
-      } else {
+      if (result.success) {
         setSuccess(true);
         // Formu temizle
         setFormData({
           finderName: "",
           finderPhone: "",
+          email: "",
           message: "",
           shareLocation: false,
         });
@@ -129,6 +131,8 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
           setOpen(false);
           setSuccess(false);
         }, 2000);
+      } else {
+        setError(result.error || 'Mesaj gönderilirken bir hata oluştu.');
       }
     } catch (err: any) {
       console.error('Contact form error:', err);
@@ -189,6 +193,22 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
                 setFormData((prev) => ({ ...prev, finderPhone: e.target.value }));
               }}
               placeholder="0555 123 45 67"
+              required
+              className="mt-2"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="email">E-posta Adresiniz *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => {
+                // Immediate update for input value (critical for UX)
+                setFormData((prev) => ({ ...prev, email: e.target.value }));
+              }}
+              placeholder="ornek@email.com"
               required
               className="mt-2"
             />
