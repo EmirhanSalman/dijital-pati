@@ -40,7 +40,7 @@ const getContractAddress = (): string => {
  * Converts IPFS URLs to gateway URLs for fetching
  * - If URL starts with 'ipfs://', converts to gateway URL
  * - If URL already starts with 'http', returns as is
- * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to Pinata gateway
+ * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to Cloudflare IPFS gateway (faster for global users)
  */
 const getGatewayUrl = (url: string): string => {
   // If already an HTTP URL, return as is
@@ -51,7 +51,7 @@ const getGatewayUrl = (url: string): string => {
   // If IPFS URL, convert to gateway URL
   if (url.startsWith('ipfs://')) {
     const ipfsHash = url.replace('ipfs://', '');
-    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://gateway.pinata.cloud/ipfs/';
+    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://cloudflare-ipfs.com/ipfs/';
     // Ensure gateway URL ends with /
     const baseUrl = gatewayUrl.endsWith('/') ? gatewayUrl : `${gatewayUrl}/`;
     return `${baseUrl}${ipfsHash}`;
