@@ -8,6 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import ContactOwnerModal from "@/components/ContactOwnerModal";
 import type { Pet } from "@/lib/supabase/server";
+import { getGatewayUrl } from "@/utils/ipfs";
 
 interface PetCardProps {
   pet: Pet;
@@ -26,7 +27,7 @@ export default function PetCard({ pet }: PetCardProps) {
     <Card className="border-2 hover:border-destructive/50 transition-colors overflow-hidden">
       <div className="relative h-64 w-full bg-gray-100 aspect-[4/3]">
         <Image
-          src={pet.image_url}
+          src={getGatewayUrl(pet.image_url || "")}
           alt={petName}
           fill
           className="object-cover"

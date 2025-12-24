@@ -16,6 +16,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
 import { QRCodeSVG } from "qrcode.react";
+import { getGatewayUrl } from "@/utils/ipfs";
 
 export default function ProfilePetsTab() {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -210,7 +211,7 @@ export default function ProfilePetsTab() {
             <Card key={pet.id || pet.token_id} className="border-2 hover:border-primary/50 transition-colors">
               <div className="relative h-48 w-full overflow-hidden rounded-t-lg bg-gray-100">
                 <Image
-                  src={pet.image_url}
+                  src={getGatewayUrl(pet.image_url || "")}
                   alt={petName}
                   fill
                   className="object-cover"
