@@ -120,7 +120,7 @@ export async function uploadPetImage(formData: FormData) {
 /**
  * Pet bilgilerini veritabanına kaydeder
  */
-export async function savePetToDatabase(data: {
+export async function savePetToDatabase(petInput: {
   tokenId: string
   name: string
   breed: string
@@ -147,7 +147,7 @@ export async function savePetToDatabase(data: {
     }
 
     // Validate tokenId is provided and is a valid string/number
-    if (!data.tokenId) {
+    if (!petInput.tokenId) {
       console.error("❌ savePetToDatabase: tokenId is missing!");
       return {
         error: "Token ID (tokenId) is required and must come from blockchain receipt.",
@@ -155,10 +155,10 @@ export async function savePetToDatabase(data: {
     }
 
     // Convert tokenId to string to ensure consistency
-    const tokenIdString = String(data.tokenId).trim();
+    const tokenIdString = String(petInput.tokenId).trim();
     
     if (!tokenIdString || tokenIdString === "null" || tokenIdString === "undefined") {
-      console.error("❌ savePetToDatabase: Invalid tokenId value:", data.tokenId);
+      console.error("❌ savePetToDatabase: Invalid tokenId value:", petInput.tokenId);
       return {
         error: "Invalid token ID. Token ID must come directly from blockchain receipt.",
       };
@@ -166,8 +166,8 @@ export async function savePetToDatabase(data: {
 
     console.log("💾 Saving pet to database:");
     console.log("  📍 token_id (from blockchain):", tokenIdString);
-    console.log("  📍 name:", data.name);
-    console.log("  📍 owner_address:", data.ownerAddress);
+    console.log("  📍 name:", petInput.name);
+    console.log("  📍 owner_address:", petInput.ownerAddress);
     console.log("  ⚠️ Note: DB 'id' (auto-increment) will differ from 'token_id' (blockchain)");
 
     // Pets tablosuna kaydet (eğer varsa)
@@ -175,36 +175,36 @@ export async function savePetToDatabase(data: {
     // IMPORTANT: token_id comes from blockchain, NOT from any local counter
     const insertData: any = {
       token_id: tokenIdString, // EXACT value from blockchain receipt
-      name: data.name,
-      breed: data.breed,
-      description: data.description,
-      image_url: data.imageUrl,
-      owner_address: data.ownerAddress,
+      name: petInput.name,
+      breed: petInput.breed,
+      description: petInput.description,
+      image_url: petInput.imageUrl,
+      owner_address: petInput.ownerAddress,
       owner_id: user.id,
     };
 
     // Prefer separate phone/email fields if provided
-    if (data.phone !== undefined && data.phone !== null) {
-      insertData.contact_phone = data.phone;
+    if (petInput.phone !== undefined && petInput.phone !== null) {
+      insertData.contact_phone = petInput.phone;
     }
-    if (data.email !== undefined && data.email !== null) {
-      insertData.contact_email = data.email;
+    if (petInput.email !== undefined && petInput.email !== null) {
+      insertData.contact_email = petInput.email;
     }
     
     // Fallback to contact_info for backwards compatibility
-    if (data.contactInfo) {
-      insertData.contact_info = data.contactInfo;
+    if (petInput.contactInfo) {
+      insertData.contact_info = petInput.contactInfo;
     }
 
     // Add location fields
-    if (data.city !== undefined && data.city !== null) {
-      insertData.city = data.city.trim();
+    if (petInput.city !== undefined && petInput.city !== null) {
+      insertData.city = petInput.city.trim();
     }
-    if (data.district !== undefined && data.district !== null) {
-      insertData.district = data.district.trim();
+    if (petInput.district !== undefined && petInput.district !== null) {
+      insertData.district = petInput.district.trim();
     }
 
-    const { data, error } = await supabase
+    const { data: savedRecord, error } = await supabase
       .from('pets')
       .insert([insertData])
       .select()
@@ -245,7 +245,7 @@ export async function savePetToDatabase(data: {
     return {
       success: true,
       message: 'Pet başarıyla kaydedildi!',
-      data: data, // Return the created record with id
+      data: savedRecord, // Return the created record with id
     }
   } catch (error: any) {
     console.error('savePetToDatabase error:', error)
