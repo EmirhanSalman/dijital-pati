@@ -10,13 +10,23 @@ if (!CONTRACT_ADDRESS) console.error('CRITICAL: NEXT_PUBLIC_CONTRACT_ADDRESS is 
 /**
  * Returns a Web3 Provider.
  * - Prioritizes MetaMask (BrowserProvider) for interactions.
- * - Fallbacks to JsonRpcProvider (Sepolia) for read-only if no wallet.
+ * - Throws an error if no wallet is present and RPC URL is not configured.
  */
 export const getWeb3Provider = (): ethers.BrowserProvider | ethers.JsonRpcProvider => {
   // Use (window as any) to avoid TypeScript conflicts
   if (typeof window !== 'undefined' && (window as any).ethereum) {
     return new ethers.BrowserProvider((window as any).ethereum);
   }
+  
+  // If no browser wallet and RPC URL is missing, throw descriptive error
+  if (!RPC_URL) {
+    throw new Error(
+      'Web3 provider configuration error: NEXT_PUBLIC_RPC_URL environment variable is missing. ' +
+      'Please configure your RPC URL in your environment variables. ' +
+      'If you are using a browser wallet, please install and connect MetaMask.'
+    );
+  }
+  
   return new ethers.JsonRpcProvider(RPC_URL);
 };
 

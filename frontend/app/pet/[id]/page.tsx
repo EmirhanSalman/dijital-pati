@@ -24,6 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
+import { getContract } from "@/utils/web3";
 
 // Get contract address from environment variable, with fallback for local development
 const getContractAddress = (): string => {
@@ -132,11 +133,24 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
         console.log("Supabase fetch failed, trying blockchain:", supabaseError);
       }
 
-      // Fallback to blockchain
+      // Fallback to blockchain - Use read-only provider (works without wallet)
       const contractAddress = getContractAddress();
       console.log("📍 Using contract address:", contractAddress);
-      const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
-      const contract = new ethers.Contract(contractAddress, DigitalPatiABI.abi, provider);
+      
+      // Always use JsonRpcProvider for read-only operations to ensure it works
+      // for users without wallets. Use NEXT_PUBLIC_RPC_URL from environment.
+      const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL;
+      if (!rpcUrl || rpcUrl.trim() === "") {
+        console.error("❌ NEXT_PUBLIC_RPC_URL is not configured in environment variables.");
+        throw new Error(
+          "Blockchain RPC URL is not configured. Please set NEXT_PUBLIC_RPC_URL in your environment variables. " +
+          "For Sepolia testnet, use: https://sepolia.infura.io/v3/YOUR_KEY or https://rpc.sepolia.org"
+        );
+      }
+      
+      console.log("📍 Using RPC URL:", rpcUrl.replace(/\/\/.*@/, "//***@") ); // Log without exposing API keys
+      const provider = new ethers.JsonRpcProvider(rpcUrl.trim());
+      const contract = getContract(provider, DigitalPatiABI.abi);
 
       const status = await contract.getPetStatus(id);
       const owner = await contract.ownerOf(id);
@@ -180,8 +194,19 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       
       if (errorMessage.includes("ERC721NonexistentToken") || errorMessage.includes("nonexistent")) {
         setError(`⚠️ Bu ID (#${id}) henüz Blockchain'e kaydedilmemiş.`);
-      } else if (err.code === "NETWORK_ERROR" || errorMessage.includes("Connection refused")) {
-        setError("🔌 Blockchain ağına bağlanılamadı.");
+      } else if (
+        err.code === "NETWORK_ERROR" || 
+        errorMessage.includes("Connection refused") ||
+        errorMessage.includes("ERR_CONNECTION_REFUSED") ||
+        errorMessage.includes("127.0.0.1:8545")
+      ) {
+        setError(
+          "🔌 Blockchain ağına bağlanılamadı. " +
+          "Lütfen NEXT_PUBLIC_RPC_URL environment variable'ını kontrol edin. " +
+          "Sepolia testnet için: https://rpc.sepolia.org veya bir Infura/Alchemy URL'i kullanın."
+        );
+      } else if (errorMessage.includes("NEXT_PUBLIC_RPC_URL")) {
+        setError(errorMessage);
       } else {
         setError("Veri çekilirken bir hata oluştu: " + (err.shortMessage || err.message));
       }

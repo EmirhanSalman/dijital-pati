@@ -226,7 +226,8 @@ export default function CreatePetPage() {
       console.log("Transaction sent:", tx.hash);
 
       // D. Wait for Confirmation & Extract Token ID
-      const receipt = await tx.wait();
+      // Wait for 1 confirmation to ensure transaction is finalized
+      const receipt = await tx.wait(1);
       
       // E. Parse Logs to find 'PetMinted' event
       let mintedTokenId: string | null = null;
