@@ -1,5 +1,9 @@
 "use client";
 
+// Force dynamic rendering to always fetch latest data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { useState, useEffect, use } from "react";
 import { ethers } from "ethers";
 import {

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getPetById } from "@/lib/supabase/server";
 
+// Force dynamic rendering to always fetch latest data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * Get pet by ID API endpoint
  * GET /api/pets/[id]
