@@ -139,12 +139,18 @@ export default async function AdminDashboardPage() {
 
           <Card className="border-2">
             <CardHeader>
-              <CardTitle>Kayıp İlanları</CardTitle>
+              <CardTitle>İlan Yönetimi</CardTitle>
               <CardDescription>
-                Kayıp hayvan ilanlarını görüntüleyin
+                Tüm ilanları görüntüleyin, düzenleyin veya silin
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <Button className="w-full" asChild>
+                <Link href="/admin/pets">
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  İlanları Yönet
+                </Link>
+              </Button>
               <Button variant="outline" className="w-full" asChild>
                 <Link href="/lost-pets">
                   <AlertTriangle className="mr-2 h-4 w-4" />

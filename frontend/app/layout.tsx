@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import NextTopLoader from "nextjs-toploader";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/react";
+import { Toaster } from "sonner";
 
 const outfit = Outfit({ subsets: ["latin"] });
 
@@ -32,6 +33,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <Footer />
         </div>
+        <Toaster />
         <SpeedInsights />
         <Analytics />
       </body>
