@@ -48,19 +48,27 @@ export function resolveImageUrl(path: string, type: ImageSourceType): string {
       const supabaseStorageUrl = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_URL;
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       
+      // Helper function to safely join URL parts without double slashes
+      const joinUrlParts = (base: string, pathPart: string): string => {
+        // Remove trailing slash from base
+        const cleanBase = base.replace(/\/+$/, '');
+        // Remove leading slashes from path
+        const cleanPath = pathPart.replace(/^\/+/, '');
+        // Join with single slash
+        return `${cleanBase}/${cleanPath}`;
+      };
+      
       // If NEXT_PUBLIC_SUPABASE_STORAGE_URL is set, use it
       if (supabaseStorageUrl) {
-        // Remove leading slash from path if present
-        const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-        return `${supabaseStorageUrl.replace(/\/$/, '')}/${cleanPath}`;
+        return joinUrlParts(supabaseStorageUrl, path);
       }
       
       // Fallback: construct from NEXT_PUBLIC_SUPABASE_URL
       if (supabaseUrl) {
         try {
           const url = new URL(supabaseUrl);
-          const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-          return `${url.origin}/storage/v1/object/public/${cleanPath}`;
+          const baseUrl = `${url.origin}/storage/v1/object/public`;
+          return joinUrlParts(baseUrl, path);
         } catch (error) {
           console.error('Invalid NEXT_PUBLIC_SUPABASE_URL:', error);
           return path; // Return as-is if URL parsing fails
