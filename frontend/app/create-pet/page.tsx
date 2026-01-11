@@ -137,15 +137,31 @@ export default function CreatePetPage() {
     }
   };
 
-  // File Selection - Optimized with immediate updates
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File Selection - Compress immediately before storing in state
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Immediate updates for file selection (critical for UX)
-      setSelectedFile(file);
-      const objectUrl = URL.createObjectURL(file);
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      setError("Geçersiz dosya formatı. Lütfen JPEG, PNG, WebP veya GIF formatında bir resim seçin.");
+      return;
+    }
+
+    try {
+      // Compress image BEFORE storing in state
+      console.log("🔄 Compressing image on file selection...");
+      const compressedFile = await compressImage(file);
+
+      // Store compressed file in state
+      setSelectedFile(compressedFile);
+      const objectUrl = URL.createObjectURL(compressedFile);
       setPreviewUrl(objectUrl);
       setError(null);
+    } catch (error: any) {
+      console.error("❌ Image compression error:", error);
+      setError("Resim sıkıştırılırken bir hata oluştu: " + (error.message || "Bilinmeyen hata"));
     }
   };
 
@@ -154,17 +170,31 @@ export default function CreatePetPage() {
     e.stopPropagation();
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      // Immediate updates for file selection (critical for UX)
-      setSelectedFile(file);
-      const objectUrl = URL.createObjectURL(file);
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("Geçersiz dosya formatı. Lütfen bir resim dosyası seçin.");
+      return;
+    }
+
+    try {
+      // Compress image BEFORE storing in state
+      console.log("🔄 Compressing dropped image...");
+      const compressedFile = await compressImage(file);
+
+      // Store compressed file in state
+      setSelectedFile(compressedFile);
+      const objectUrl = URL.createObjectURL(compressedFile);
       setPreviewUrl(objectUrl);
       setError(null);
+    } catch (error: any) {
+      console.error("❌ Image compression error:", error);
+      setError("Resim sıkıştırılırken bir hata oluştu: " + (error.message || "Bilinmeyen hata"));
     }
   };
 
@@ -187,14 +217,11 @@ export default function CreatePetPage() {
     }
 
     try {
-      // --- STEP 1: Compress Image (Client-side) ---
+      // --- STEP 1: Upload Image to Pinata ---
+      // Note: Image is already compressed in handleFileSelect/handleDrop
       setStep("uploading");
-      console.log("🔄 Compressing image before upload...");
-      const compressedFile = await compressImage(selectedFile);
-      
-      // --- STEP 2: Upload Image to Pinata ---
       const imageFormData = new FormData();
-      imageFormData.append("image", compressedFile);
+      imageFormData.append("image", selectedFile);
 
       const uploadResponse = await fetch("/api/pets/upload", {
         method: "POST",
@@ -230,33 +257,86 @@ export default function CreatePetPage() {
       const tx = await contract.mintPet(ipfsUri, contactInfo);
       console.log("Transaction sent:", tx.hash);
 
-      // D. Wait for Confirmation & Extract Token ID
+      // D. Wait for Transaction Receipt & Extract Token ID
       // Wait for 1 confirmation to ensure transaction is finalized
+      console.log("⏳ Waiting for transaction confirmation...");
       const receipt = await tx.wait(1);
+      console.log("✅ Transaction confirmed in block:", receipt.blockNumber);
       
       // E. Parse Logs to find 'PetMinted' event
       let mintedTokenId: string | null = null;
       
+      // Method 1: Try to parse PetMinted event from contract interface
       for (const log of receipt.logs) {
         try {
           const parsedLog = contract.interface.parseLog(log);
           if (parsedLog && parsedLog.name === 'PetMinted') {
+            // PetMinted event: event PetMinted(uint256 indexed tokenId, address owner)
+            // tokenId is the first indexed parameter (args[0])
             mintedTokenId = parsedLog.args[0].toString();
+            console.log("✅ Found PetMinted event with tokenId:", mintedTokenId);
             break;
           }
         } catch (err) {
+          // This log doesn't match our contract interface, continue
           continue;
         }
       }
 
+      // Method 2: Fallback - Look for ERC721 Transfer event
+      // Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
+      // The tokenId is in the third topic (index 2)
       if (!mintedTokenId) {
-        // Fallback: If event parsing fails, try to fetch user's last token or handle gracefully
-        console.warn("Could not parse TokenID from logs, checking backup...");
-        // For MVP stability, if we can't find ID, we might throw or use a placeholder if strictly needed
-        throw new Error("Blockchain onayı alındı ancak Token ID okunamadı.");
+        console.log("⚠️ PetMinted event not found, trying Transfer event...");
+        for (const log of receipt.logs) {
+          try {
+            // Transfer event signature: keccak256("Transfer(address,address,uint256)")
+            // Topics: [eventSignature, from, to, tokenId]
+            if (log.topics && log.topics.length >= 4) {
+              // Check if this is a Transfer event (first topic should be Transfer signature)
+              // Transfer(address,address,uint256) = 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
+              const transferEventSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+              if (log.topics[0] === transferEventSignature) {
+                // tokenId is in topics[3] (index 2, but topics array is 0-indexed)
+                const tokenIdHex = log.topics[3];
+                if (tokenIdHex) {
+                  mintedTokenId = BigInt(tokenIdHex).toString();
+                  console.log("✅ Found Transfer event with tokenId:", mintedTokenId);
+                  break;
+                }
+              }
+            }
+          } catch (err) {
+            continue;
+          }
+        }
       }
 
-      console.log("✅ Minted Token ID:", mintedTokenId);
+      // Method 3: If still not found, log all logs for debugging
+      if (!mintedTokenId) {
+        console.warn("⚠️ Could not find tokenId in events. Logging all receipt logs for debugging...");
+        console.log("All receipt logs:", receipt.logs.map((log: any, idx: number) => ({
+          index: idx,
+          address: log.address,
+          topics: log.topics,
+          data: log.data
+        })));
+      }
+
+      if (!mintedTokenId) {
+        // Fallback: Redirect to lost-pets list instead of throwing error
+        console.error("❌ Could not parse TokenID from transaction logs");
+        console.error("Transaction receipt:", receipt);
+        setStep("error");
+        setError("Pet başarıyla oluşturuldu ancak Token ID okunamadı. Lütfen profil sayfanızdan kontrol edin.");
+        // Redirect to lost-pets list as fallback
+        setTimeout(() => {
+          router.push("/lost-pets");
+        }, 3000);
+        return;
+      }
+
+      console.log("✅ Minted Token ID (from blockchain):", mintedTokenId);
       setTokenId(mintedTokenId);
 
       // --- STEP 4: Save to Supabase ---
@@ -288,12 +368,27 @@ export default function CreatePetPage() {
       const petId = saveData.data?.id;
 
       if (!petId) {
-        throw new Error("Pet kaydedildi ancak ID alınamadı.");
+        console.warn("⚠️ Database ID not returned, but pet was saved. Using token ID for redirect.");
       }
 
       setStep("success");
+      
+      // Use blockchain token ID for redirection (source of truth)
+      // The lost-pets detail page can handle both UUID and token_id
+      const redirectId = mintedTokenId || petId;
+      
+      if (!redirectId) {
+        // Ultimate fallback: redirect to lost-pets list
+        console.error("❌ No valid ID for redirection, redirecting to list");
+        setTimeout(() => {
+          router.push("/lost-pets");
+        }, 2000);
+        return;
+      }
+
+      console.log("🔄 Redirecting to:", `/lost-pets/${redirectId}`);
       setTimeout(() => {
-        router.push(`/pet/${petId}`);
+        router.push(`/lost-pets/${redirectId}`);
       }, 2000);
 
     } catch (err: any) {
@@ -461,7 +556,7 @@ export default function CreatePetPage() {
                           Resmi buraya sürükleyin veya tıklayın
                         </p>
                         <p className="text-sm text-slate-500">
-                          PNG, JPG, WebP (Max 10MB)
+                          PNG, JPG, WebP (Otomatik sıkıştırılacaktır)
                         </p>
                       </div>
                     )}

@@ -8,6 +8,7 @@ import { uploadAvatar } from "@/app/actions/profile";
 import { useRouter } from "next/navigation";
 import ImageCropper from "./ImageCropper";
 import { blobToFile } from "@/lib/canvasUtils";
+import { compressImage } from "@/utils/image-compression";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -22,18 +23,26 @@ export default function AvatarUpload({ currentAvatarUrl, userInitials }: AvatarU
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Dosya boyutu kontrolü (5MB)
-      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-      if (file.size > maxSize) {
-        alert("Dosya boyutu çok büyük. Maksimum 5MB boyutunda resim yükleyebilirsiniz.");
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
-        return;
-      }
+    if (!file) return;
+
+    // Reset input value
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Geçersiz dosya formatı. Lütfen JPEG, PNG, WebP veya GIF formatında bir resim seçin.");
+      return;
+    }
+
+    try {
+      // Compress image BEFORE storing in state or processing
+      console.log("🔄 Compressing avatar image before processing...");
+      const compressedFile = await compressImage(file);
 
       // Dosyayı FileReader ile oku ve modal'ı aç
       const reader = new FileReader();
@@ -45,7 +54,11 @@ export default function AvatarUpload({ currentAvatarUrl, userInitials }: AvatarU
       reader.onerror = () => {
         alert("Dosya okunurken bir hata oluştu. Lütfen tekrar deneyin.");
       };
-      reader.readAsDataURL(file);
+      // Use compressed file instead of original
+      reader.readAsDataURL(compressedFile);
+    } catch (error: any) {
+      console.error("❌ Image compression error:", error);
+      alert("Resim sıkıştırılırken bir hata oluştu: " + (error.message || "Bilinmeyen hata"));
     }
   };
 
@@ -138,7 +151,7 @@ export default function AvatarUpload({ currentAvatarUrl, userInitials }: AvatarU
         </Button>
 
         <p className="text-xs text-muted-foreground text-center max-w-xs">
-          JPEG, PNG, WebP veya GIF formatında, maksimum 5MB boyutunda resim yükleyebilirsiniz.
+          JPEG, PNG, WebP veya GIF formatında resim yükleyebilirsiniz. Resimler otomatik olarak sıkıştırılacaktır.
         </p>
       </div>
 

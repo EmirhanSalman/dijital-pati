@@ -7,7 +7,7 @@ import imageCompression from 'browser-image-compression';
  */
 export async function compressImage(file: File): Promise<File> {
   const options = {
-    maxSizeMB: 1, // Maximum file size in MB
+    maxSizeMB: 0.8, // Maximum file size in MB (below Vercel's 4.5MB limit)
     maxWidthOrHeight: 1920, // Maximum width or height
     useWebWorker: true, // Use web worker for better performance
     fileType: file.type, // Preserve original file type

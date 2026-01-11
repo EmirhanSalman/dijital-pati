@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import ContactOwnerModal from "@/components/ContactOwnerModal";
 import type { Pet } from "@/lib/supabase/server";
 import { getGatewayUrl } from "@/utils/ipfs";
 
@@ -68,10 +67,18 @@ export default function PetCard({ pet }: PetCardProps) {
 
         <div className="flex gap-2">
           {hasContactInfo && (
-            <ContactOwnerModal pet={pet} />
+            <Button 
+              variant="outline" 
+              className="flex-1" 
+              asChild
+            >
+              <Link href={`/lost-pets/${pet.id}`}>
+                İletişime Geç
+              </Link>
+            </Button>
           )}
           <Button variant="outline" className={hasContactInfo ? "flex-1" : "w-full"} asChild>
-            <Link href={`/pet/${pet.token_id}`}>
+            <Link href={`/lost-pets/${pet.id}`}>
               Detayları Gör
             </Link>
           </Button>
