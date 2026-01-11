@@ -268,7 +268,6 @@ export default function ProfilePetsTab() {
       {/* QR Kod Modal */}
       <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
         <DialogContent className="sm:max-w-[400px]">
-          <DialogDescription className="sr-only">Dialog Details</DialogDescription>
           <DialogHeader>
             <DialogTitle>QR Kod</DialogTitle>
             <DialogDescription>

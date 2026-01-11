@@ -159,7 +159,6 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
         {trigger || defaultTrigger}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
-        <DialogDescription className="sr-only">Dialog Details</DialogDescription>
         <DialogHeader>
           <DialogTitle>Sahibiyle İletişime Geç</DialogTitle>
           <DialogDescription>

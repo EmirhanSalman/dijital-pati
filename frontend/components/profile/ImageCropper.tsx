@@ -78,7 +78,6 @@ export default function ImageCropper({ imageSrc, isOpen, onClose, onCropComplete
   return (
     <Dialog open={isOpen} onOpenChange={handleCancel}>
       <DialogContent className="max-w-2xl w-full p-0">
-        <DialogDescription className="sr-only">Dialog Details</DialogDescription>
         <DialogHeader className="px-6 pt-6">
           <DialogTitle>Profil Fotoğrafını Kırp</DialogTitle>
           <DialogDescription>
