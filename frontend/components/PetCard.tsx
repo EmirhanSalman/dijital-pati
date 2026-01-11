@@ -9,6 +9,7 @@ import { AlertTriangle } from "lucide-react";
 import Image from "next/image";
 import type { Pet } from "@/lib/supabase/server";
 import { getGatewayUrl } from "@/utils/ipfs";
+import ContactOwnerModal from "@/components/ContactOwnerModal";
 
 interface PetCardProps {
   pet: Pet;
@@ -31,12 +32,6 @@ export default function PetCard({ pet }: PetCardProps) {
 
   const handleImageLoad = () => {
     setIsLoading(false);
-  };
-
-  const handleContactClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    router.push(`/lost-pets/${petId}`);
   };
 
   const handleDetailsClick = (e: React.MouseEvent) => {
@@ -83,13 +78,17 @@ export default function PetCard({ pet }: PetCardProps) {
 
         <div className="flex gap-2">
           {hasContactInfo && (
-            <Button 
-              variant="outline" 
-              className="flex-1" 
-              onClick={handleContactClick}
-            >
-              İletişime Geç
-            </Button>
+            <ContactOwnerModal
+              pet={pet}
+              trigger={
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                >
+                  İletişime Geç
+                </Button>
+              }
+            />
           )}
           <Button 
             variant="outline" 
