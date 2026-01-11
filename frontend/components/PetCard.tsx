@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ interface PetCardProps {
 
 export default function PetCard({ pet }: PetCardProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
 
   // Pet adını belirle
   const petName = pet.name && pet.name.trim() && !pet.name.startsWith("Pati #") 
@@ -30,14 +29,11 @@ export default function PetCard({ pet }: PetCardProps) {
   // Pet ID'yi belirle (fallback ile)
   const petId = pet.id || pet.token_id;
 
+  // Debug: Log pet ID to verify we have it
+  console.log('PetCard - Pet ID:', petId, 'pet.id:', pet.id, 'pet.token_id:', pet.token_id);
+
   const handleImageLoad = () => {
     setIsLoading(false);
-  };
-
-  const handleDetailsClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    router.push(`/pet/${petId}`);
   };
 
   return (
@@ -93,9 +89,11 @@ export default function PetCard({ pet }: PetCardProps) {
           <Button 
             variant="outline" 
             className={hasContactInfo ? "flex-1" : "w-full"} 
-            onClick={handleDetailsClick}
+            asChild
           >
-            Detayları Gör
+            <Link href={`/pet/${petId}`}>
+              Detayları Gör
+            </Link>
           </Button>
         </div>
       </CardContent>
