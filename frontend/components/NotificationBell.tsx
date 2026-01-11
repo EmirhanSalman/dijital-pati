@@ -169,7 +169,7 @@ export default function NotificationBell({ notifications: initialNotifications }
               return supabaseInstance.removeChannel(channelToCleanup);
             }
           })
-          .catch((error) => {
+          .catch((error: any) => {
             console.error("Error cleaning up subscription:", error);
           });
       }
