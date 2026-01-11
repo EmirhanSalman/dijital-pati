@@ -98,7 +98,6 @@ export default function HowItWorks() {
                 fill
                 className="object-cover rounded-2xl shadow-2xl"
                 sizes="(max-width: 1024px) 100vw, 50vw"
-                priority
                 quality={90}
               />
               {/* Overlay gradient for better text contrast */}
@@ -124,7 +123,6 @@ export default function HowItWorks() {
                 fill
                 className="object-cover rounded-2xl shadow-2xl"
                 sizes="100vw"
-                priority
                 quality={90}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none z-10" />

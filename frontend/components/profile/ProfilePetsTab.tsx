@@ -271,12 +271,14 @@ export default function ProfilePetsTab() {
           <DialogHeader>
             <DialogTitle>QR Kod</DialogTitle>
             <DialogDescription>
-              {selectedPet && (
+              {selectedPet ? (
                 <>
                   {selectedPet.name && selectedPet.name.trim() && !selectedPet.name.startsWith("Pati #")
                     ? selectedPet.name
                     : `Pati #${selectedPet.token_id}`} için QR kod
                 </>
+              ) : (
+                "QR kod görüntüleme"
               )}
             </DialogDescription>
           </DialogHeader>
