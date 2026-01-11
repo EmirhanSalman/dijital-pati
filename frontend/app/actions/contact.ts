@@ -34,9 +34,8 @@ export async function sendContactEmail(data: ContactEmailParams): Promise<Action
 
   try {
     // 3. Determine Recipient (Safe Handling for Dev/Test)
-    const isDev = process.env.NODE_ENV === 'development';
-    // In Dev, use Resend's magic test email to avoid 403 errors
-    const toAddress = isDev ? 'delivered@resend.dev' : 'admin@dijitalpati.com'; 
+    // TODO: Change this to the pet owner's email after domain verification
+    const toAddress = 'emirhansalman07@gmail.com'; // Temporarily hardcoded for Resend Sandbox mode 
 
     const { data: emailData, error: resendError } = await resend.emails.send({
       from: 'Dijital Pati <onboarding@resend.dev>',
