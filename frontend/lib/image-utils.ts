@@ -40,6 +40,11 @@ export function resolveImageUrl(path: string, type: ImageSourceType): string {
     }
 
     case 'supabase': {
+      // If already a full URL, return as is (don't append Supabase base URL)
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path;
+      }
+      
       const supabaseStorageUrl = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_URL;
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       
