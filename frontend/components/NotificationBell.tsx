@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Notification } from "@/lib/supabase/server";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { X } from "lucide-react";
 
 interface NotificationBellProps {
@@ -80,7 +81,7 @@ export default function NotificationBell({ notifications: initialNotifications }
   // Realtime subscription kur
   useEffect(() => {
     let mounted = true;
-    let channel: ReturnType<typeof createClient>['channel'] | null = null;
+    let channel: RealtimeChannel | null = null;
     let supabaseInstance: ReturnType<typeof createClient> | null = null;
 
     const setupRealtimeSubscription = async () => {
