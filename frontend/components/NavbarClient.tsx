@@ -117,9 +117,11 @@ export default function NavbarClient({
                   Evcil Hayvan Ekle
                 </Link>
               </Button>
-              <Button variant="outline" size="sm">
-                <Wallet className="h-4 w-4 mr-2" />
-                Cüzdan Bağla
+              <Button variant="outline" size="sm" asChild>
+                <Link href="#">
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Cüzdan Bağla
+                </Link>
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -235,7 +237,7 @@ export default function NavbarClient({
                       </Link>
                     </Button>
                     <Button variant="outline" className="w-full" asChild>
-                      <Link href="/wallet" onClick={() => setIsOpen(false)}>
+                      <Link href="#" onClick={(e) => { e.preventDefault(); setIsOpen(false); }}>
                         <Wallet className="h-4 w-4 mr-2" />
                         Cüzdan Bağla
                       </Link>
