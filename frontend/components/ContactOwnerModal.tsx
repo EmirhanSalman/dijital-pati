@@ -113,6 +113,8 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
         ownerId: pet.owner_id,
         senderEmail: formData.email.trim(),
         message: formData.message.trim(),
+        latitude: location?.lat,
+        longitude: location?.lng,
       });
 
       if (result.success) {

@@ -12,6 +12,8 @@ interface ContactEmailParams {
   ownerId: string;
   senderEmail: string;
   message: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface ActionResponse {
@@ -21,7 +23,18 @@ interface ActionResponse {
 }
 
 // Helper function to create HTML email
-function createContactEmailHTML(petName: string, senderEmail: string, message: string): string {
+function createContactEmailHTML(petName: string, senderEmail: string, message: string, googleMapsLink?: string): string {
+  const locationButton = googleMapsLink ? `
+              <!-- Location Button -->
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width: 100%; margin: 30px 0;">
+                <tr>
+                  <td align="center" style="padding: 20px 0;">
+                    <a href="${googleMapsLink}" target="_blank" style="background-color: #667eea; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; font-weight: 600; font-size: 16px;">📍 Konumu Haritada Gör</a>
+                  </td>
+                </tr>
+              </table>
+  ` : '';
+
   return `
 <!DOCTYPE html>
 <html lang="tr">
@@ -77,6 +90,8 @@ ${message.replace(/\n/g, '<br>')}
                 </p>
               </div>
               
+              ${locationButton}
+              
               <!-- Footer Info -->
               <p style="margin: 30px 0 0 0; color: #999999; font-size: 14px; line-height: 1.6;">
                 Bu mesaj, Dijital Pati platformu aracılığıyla gönderilmiştir. Gönderene doğrudan e-posta ile yanıt verebilirsiniz.
@@ -102,7 +117,7 @@ ${message.replace(/\n/g, '<br>')}
 }
 
 export async function sendContactEmail(data: ContactEmailParams): Promise<ActionResponse> {
-  const { petId, ownerId, senderEmail, message } = data;
+  const { petId, ownerId, senderEmail, message, latitude, longitude } = data;
 
   // 1. Validate Inputs
   if (!petId || !ownerId || !senderEmail || !message) {
@@ -131,8 +146,13 @@ export async function sendContactEmail(data: ContactEmailParams): Promise<Action
     // TODO: Change this to the pet owner's email after domain verification
     const toAddress = 'emirhansalman07@gmail.com'; // Temporarily hardcoded for Resend Sandbox mode
 
-    // 5. Create HTML Email Content
-    const htmlContent = createContactEmailHTML(petName, senderEmail, message);
+    // 5. Create Google Maps Link if coordinates are provided
+    const googleMapsLink = latitude && longitude 
+      ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+      : undefined;
+
+    // 6. Create HTML Email Content
+    const htmlContent = createContactEmailHTML(petName, senderEmail, message, googleMapsLink);
     const textContent = `
 Yeni bir mesajınız var!
 
@@ -143,7 +163,7 @@ Mesaj:
 ${message}
     `.trim();
 
-    // 6. Send Email
+    // 7. Send Email
     const { data: emailData, error: resendError } = await resend.emails.send({
       from: 'Dijital Pati <onboarding@resend.dev>',
       to: [toAddress],
@@ -153,7 +173,7 @@ ${message}
       text: textContent,
     });
 
-    // 7. Handle Resend API Errors
+    // 8. Handle Resend API Errors
     if (resendError) {
       console.error('Resend API Error:', resendError);
 
@@ -167,30 +187,48 @@ ${message}
       return { success: false, error: 'E-posta servisi hatası. Lütfen daha sonra tekrar deneyin.' };
     }
 
-    // 8. Create Notification Record
+    // 9. Create Notification Record
     const supabase = await createClient();
     const notificationMessage = `${senderEmail} size "${petName}" için bir mesaj gönderdi.`;
-    // Use pet.id (UUID) for the link as it's the database primary key
-    const petLink = `/pet/${pet.id}`;
+    
+    // Build metadata object
+    const metadata: Record<string, any> = {
+      sender_email: senderEmail,
+      message: message,
+      pet_id: petId,
+      pet_name: petName,
+    };
 
-    const { error: notificationError } = await supabase
+    // Add location to metadata if provided
+    if (latitude !== undefined && longitude !== undefined) {
+      metadata.latitude = latitude;
+      metadata.longitude = longitude;
+    }
+
+    // Insert notification and get the created notification ID
+    const { data: notificationData, error: notificationError } = await supabase
       .from('notifications')
       .insert({
         user_id: ownerId,
         type: 'contact',
         message: notificationMessage,
-        link: petLink,
-        metadata: {
-          pet_id: petId,
-          pet_name: petName,
-          sender_email: senderEmail,
-        },
-      });
+        link: null, // Will be updated after insert
+        metadata: metadata,
+      })
+      .select()
+      .single();
 
     if (notificationError) {
       console.error('Notification creation error:', notificationError);
       // Don't fail the entire operation if notification creation fails
       // Email was sent successfully, notification is just a bonus
+    } else if (notificationData) {
+      // Update notification with the correct link pointing to detail page
+      const notificationLink = `/notifications/${notificationData.id}`;
+      await supabase
+        .from('notifications')
+        .update({ link: notificationLink })
+        .eq('id', notificationData.id);
     }
 
     return { success: true, message: 'Email sent successfully' };

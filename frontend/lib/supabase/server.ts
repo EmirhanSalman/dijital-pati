@@ -529,7 +529,7 @@ export async function getComments(postId: string): Promise<ForumComment[]> {
 export interface Notification {
   id: string;
   user_id: string;
-  type: "reply" | "lost_pet_found" | "mention" | "system" | "contact_request" | "location_alert";
+  type: "reply" | "lost_pet_found" | "mention" | "system" | "contact" | "contact_request" | "location_alert";
   message: string;
   link: string | null;
   is_read: boolean;
