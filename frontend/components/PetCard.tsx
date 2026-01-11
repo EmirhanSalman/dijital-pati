@@ -26,12 +26,6 @@ export default function PetCard({ pet }: PetCardProps) {
   // İletişim bilgilerini kontrol et
   const hasContactInfo = !!(pet.contact_phone || pet.contact_email || pet.contact_info);
 
-  // Pet ID'yi belirle (fallback ile)
-  const petId = pet.id || pet.token_id;
-
-  // Debug: Log pet ID to verify we have it
-  console.log('PetCard - Pet ID:', petId, 'pet.id:', pet.id, 'pet.token_id:', pet.token_id);
-
   const handleImageLoad = () => {
     setIsLoading(false);
   };
@@ -86,14 +80,8 @@ export default function PetCard({ pet }: PetCardProps) {
               }
             />
           )}
-          <Button 
-            variant="outline" 
-            className={hasContactInfo ? "flex-1" : "w-full"} 
-            asChild
-          >
-            <Link href={`/pet/${petId}`}>
-              Detayları Gör
-            </Link>
+          <Button variant="outline" className={hasContactInfo ? "flex-1" : "w-full"} asChild>
+            <Link href={`/pet/${pet.token_id}`}>Detayları Gör</Link>
           </Button>
         </div>
       </CardContent>
