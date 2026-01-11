@@ -2,7 +2,7 @@
  * Converts IPFS URLs to gateway URLs for fetching
  * - If URL starts with 'ipfs://', converts to gateway URL
  * - If URL already starts with 'http', returns as is
- * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to dweb.link (stable and fast)
+ * - Uses NEXT_PUBLIC_GATEWAY_URL or defaults to gateway.pinata.cloud (whitelisted and fast)
  */
 export const getGatewayUrl = (url: string): string => {
   // If already an HTTP URL, return as is
@@ -13,11 +13,11 @@ export const getGatewayUrl = (url: string): string => {
   // If IPFS URL, convert to gateway URL
   if (url.startsWith('ipfs://')) {
     const ipfsHash = url.replace('ipfs://', '');
-    // Use NEXT_PUBLIC_GATEWAY_URL if configured, otherwise use dweb.link
-    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://dweb.link/ipfs/';
+    // Use NEXT_PUBLIC_GATEWAY_URL if configured, otherwise use gateway.pinata.cloud
+    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://gateway.pinata.cloud/ipfs/';
     // Ensure gateway URL ends with /
     const baseUrl = gatewayUrl.endsWith('/') ? gatewayUrl : `${gatewayUrl}/`;
-    // Form URL correctly: https://dweb.link/ipfs/CID
+    // Form URL correctly: https://gateway.pinata.cloud/ipfs/CID
     return `${baseUrl}${ipfsHash}`;
   }
 
@@ -42,8 +42,8 @@ export const fetchFromIpfsWithFallback = async (url: string): Promise<Response |
   if (url.startsWith('ipfs://')) {
     const ipfsHash = url.replace('ipfs://', '');
     
-    // Primary gateway: dweb.link
-    const primaryGateway = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://dweb.link/ipfs/';
+    // Primary gateway: gateway.pinata.cloud
+    const primaryGateway = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://gateway.pinata.cloud/ipfs/';
     const primaryUrl = `${primaryGateway.endsWith('/') ? primaryGateway : `${primaryGateway}/`}${ipfsHash}`;
     
     try {
@@ -69,4 +69,5 @@ export const fetchFromIpfsWithFallback = async (url: string): Promise<Response |
 
   return null;
 };
+
 

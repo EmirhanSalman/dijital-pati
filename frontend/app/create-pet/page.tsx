@@ -27,6 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { connectWallet, getContract } from "@/utils/web3";
 import { ethers } from "ethers";
 import { CITIES as ALL_CITIES } from "@/constants/cities";
+import { compressImage } from "@/utils/image-compression";
 
 // Pet türleri (FilterBar ile aynı)
 const PET_TYPES = [
@@ -186,10 +187,14 @@ export default function CreatePetPage() {
     }
 
     try {
-      // --- STEP 1: Upload Image to Pinata ---
+      // --- STEP 1: Compress Image (Client-side) ---
       setStep("uploading");
+      console.log("🔄 Compressing image before upload...");
+      const compressedFile = await compressImage(selectedFile);
+      
+      // --- STEP 2: Upload Image to Pinata ---
       const imageFormData = new FormData();
-      imageFormData.append("image", selectedFile);
+      imageFormData.append("image", compressedFile);
 
       const uploadResponse = await fetch("/api/pets/upload", {
         method: "POST",
@@ -206,7 +211,7 @@ export default function CreatePetPage() {
       const imageUrlForDb = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
       setImageUrl(imageUrlForDb);
 
-      // --- STEP 2: Blockchain Transaction ---
+      // --- STEP 3: Blockchain Transaction ---
       setStep("minting"); 
       
       // A. Connect & Get Contract
@@ -254,7 +259,7 @@ export default function CreatePetPage() {
       console.log("✅ Minted Token ID:", mintedTokenId);
       setTokenId(mintedTokenId);
 
-      // --- STEP 3: Save to Supabase ---
+      // --- STEP 4: Save to Supabase ---
       setStep("saving");
 
       const saveResponse = await fetch("/api/pets/save", {
