@@ -66,8 +66,8 @@ function createContactEmailHTML(petName: string, senderEmail: string, message: s
               <p style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.6;">
                 Merhaba,
               </p>
-              <p style="margin: 0 0 30px 0; color: #333333; font-size: 16px; line-height: 1.6;">
-                <strong>${petName}</strong> için size yeni bir iletişim mesajı geldi.
+              <p style="margin: 0 0 30px 0; color: #333333; font-size: 18px; line-height: 1.6; font-weight: 600;">
+                Harika bir haber! <strong>${petName}</strong> isimli hayvanınız için bir 'Buldum' bildirimi aldınız. Detayları aşağıda ve bildirimler sayfanızda bulabilirsiniz.
               </p>
               
               <!-- Message Box -->
@@ -168,7 +168,7 @@ ${message}
       from: 'Dijital Pati <onboarding@resend.dev>',
       to: [toAddress],
       replyTo: senderEmail,
-      subject: `Dijital Pati: İletişim Talebi - ${petName}`,
+      subject: `🚨 MÜJDE! ${petName} Hakkında Yeni Bir Bilgi Var!`,
       html: htmlContent,
       text: textContent,
     });
@@ -189,7 +189,8 @@ ${message}
 
     // 9. Create Notification Record
     const supabase = await createClient();
-    const notificationMessage = `${senderEmail} size "${petName}" için bir mesaj gönderdi.`;
+    // Updated urgent and professional message
+    const notificationMessage = `Harika bir haber! ${petName} isimli hayvanınız için bir 'Buldum' bildirimi aldınız. Detayları aşağıda ve bildirimler sayfanızda bulabilirsiniz.`;
     
     // Build metadata object
     const metadata: Record<string, any> = {
@@ -205,30 +206,58 @@ ${message}
       metadata.longitude = longitude;
     }
 
-    // Insert notification and get the created notification ID
-    const { data: notificationData, error: notificationError } = await supabase
-      .from('notifications')
-      .insert({
-        user_id: ownerId,
-        type: 'contact',
-        message: notificationMessage,
-        link: null, // Will be updated after insert
-        metadata: metadata,
-      })
-      .select()
-      .single();
+    // Verify ownerId is valid (should be the pet owner, not sender)
+    console.log('Creating notification for ownerId:', ownerId);
+    console.log('Pet ID:', petId);
+    console.log('Pet Name:', petName);
+    console.log('Sender Email:', senderEmail);
 
-    if (notificationError) {
-      console.error('Notification creation error:', notificationError);
-      // Don't fail the entire operation if notification creation fails
-      // Email was sent successfully, notification is just a bonus
-    } else if (notificationData) {
-      // Update notification with the correct link pointing to detail page
-      const notificationLink = `/notifications/${notificationData.id}`;
-      await supabase
+    try {
+      // Insert notification and get the created notification ID
+      const { data: notificationData, error: notificationError } = await supabase
         .from('notifications')
-        .update({ link: notificationLink })
-        .eq('id', notificationData.id);
+        .insert({
+          user_id: ownerId,
+          type: 'contact', // Ensure type is exactly 'contact'
+          message: notificationMessage,
+          link: null, // Will be updated after insert
+          metadata: metadata,
+        })
+        .select()
+        .single();
+
+      if (notificationError) {
+        console.error('❌ Notification creation FAILED:');
+        console.error('Error details:', JSON.stringify(notificationError, null, 2));
+        console.error('Error code:', notificationError.code);
+        console.error('Error message:', notificationError.message);
+        console.error('Error hint:', notificationError.hint);
+        console.error('Attempted insert data:', {
+          user_id: ownerId,
+          type: 'contact',
+          message: notificationMessage,
+          metadata: metadata,
+        });
+        // Don't fail the entire operation if notification creation fails
+        // Email was sent successfully, notification is just a bonus
+      } else if (notificationData) {
+        console.log('✅ Notification created successfully with ID:', notificationData.id);
+        // Update notification with the correct link pointing to detail page
+        const notificationLink = `/notifications/${notificationData.id}`;
+        const { error: updateError } = await supabase
+          .from('notifications')
+          .update({ link: notificationLink })
+          .eq('id', notificationData.id);
+        
+        if (updateError) {
+          console.error('⚠️ Failed to update notification link:', updateError);
+        } else {
+          console.log('✅ Notification link updated to:', notificationLink);
+        }
+      }
+    } catch (notificationException) {
+      console.error('❌ Exception during notification creation:', notificationException);
+      console.error('Exception stack:', (notificationException as Error).stack);
     }
 
     return { success: true, message: 'Email sent successfully' };

@@ -90,6 +90,25 @@ export default async function NotificationDetailPage({ params }: NotificationDet
         {/* Contact Notification Content */}
         {isContactNotification && (
           <div className="space-y-6">
+            {/* Success Banner */}
+            {petName && (
+              <Card className="border-2 border-green-500 bg-green-50">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="text-4xl">🎉</div>
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-bold text-green-800 mb-1">
+                        MÜJDE! {petName} Bulunmuş Olabilir!
+                      </h2>
+                      <p className="text-green-700">
+                        Birisi {petName} hakkında bilgi paylaştı. Detayları aşağıda inceleyebilirsiniz.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Pet Name Card */}
             {petName && (
               <Card className="border-2">
