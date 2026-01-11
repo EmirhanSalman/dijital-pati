@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import type { Pet } from "@/lib/supabase/server";
 import { getGatewayUrl } from "@/utils/ipfs";
 
@@ -16,6 +16,7 @@ interface PetCardProps {
 
 export default function PetCard({ pet }: PetCardProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
   // Pet adını belirle
   const petName = pet.name && pet.name.trim() && !pet.name.startsWith("Pati #") 
@@ -25,8 +26,23 @@ export default function PetCard({ pet }: PetCardProps) {
   // İletişim bilgilerini kontrol et
   const hasContactInfo = !!(pet.contact_phone || pet.contact_email || pet.contact_info);
 
+  // Pet ID'yi belirle (fallback ile)
+  const petId = pet.id || pet.token_id;
+
   const handleImageLoad = () => {
     setIsLoading(false);
+  };
+
+  const handleContactClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    router.push(`/lost-pets/${petId}`);
+  };
+
+  const handleDetailsClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    router.push(`/lost-pets/${petId}`);
   };
 
   return (
@@ -34,7 +50,7 @@ export default function PetCard({ pet }: PetCardProps) {
       <div className="relative h-64 w-full bg-gray-100 aspect-[4/3]">
         {/* Loading Skeleton */}
         {isLoading && (
-          <div className="absolute inset-0 animate-pulse bg-gray-200 z-10" />
+          <div className="absolute inset-0 animate-pulse bg-gray-200 z-10 pointer-events-none" />
         )}
         <Image
           src={getGatewayUrl(pet.image_url || "")}
@@ -46,7 +62,7 @@ export default function PetCard({ pet }: PetCardProps) {
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           onLoad={handleImageLoad}
         />
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 z-20">
           <Badge
             variant="destructive"
             className="px-3 py-1 text-sm font-bold animate-pulse"
@@ -56,7 +72,7 @@ export default function PetCard({ pet }: PetCardProps) {
           </Badge>
         </div>
       </div>
-      <CardContent className="pt-4">
+      <CardContent className="pt-4 relative z-10">
         <h3 className="font-bold text-lg mb-2">{petName}</h3>
         {pet.breed && (
           <p className="text-sm text-gray-600 mb-1">
@@ -70,17 +86,17 @@ export default function PetCard({ pet }: PetCardProps) {
             <Button 
               variant="outline" 
               className="flex-1" 
-              asChild
+              onClick={handleContactClick}
             >
-              <Link href={`/lost-pets/${pet.id}`}>
-                İletişime Geç
-              </Link>
+              İletişime Geç
             </Button>
           )}
-          <Button variant="outline" className={hasContactInfo ? "flex-1" : "w-full"} asChild>
-            <Link href={`/lost-pets/${pet.id}`}>
-              Detayları Gör
-            </Link>
+          <Button 
+            variant="outline" 
+            className={hasContactInfo ? "flex-1" : "w-full"} 
+            onClick={handleDetailsClick}
+          >
+            Detayları Gör
           </Button>
         </div>
       </CardContent>
