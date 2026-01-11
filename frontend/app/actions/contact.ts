@@ -1,5 +1,7 @@
 'use server'
 import { Resend } from 'resend';
+import { createClient } from '@/lib/supabase/server';
+import { getPetById } from '@/lib/supabase/server';
 
 // Initialize Resend client safely
 const resendApiKey = process.env.RESEND_API_KEY;
@@ -18,6 +20,87 @@ interface ActionResponse {
   error?: string;
 }
 
+// Helper function to create HTML email
+function createContactEmailHTML(petName: string, senderEmail: string, message: string): string {
+  return `
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>İletişim Talebi</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5;">
+    <tr>
+      <td style="padding: 20px 0;">
+        <table role="presentation" style="width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px 20px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">
+                🐾 Dijital Pati
+              </h1>
+              <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 16px; opacity: 0.9;">
+                Yeni İletişim Talebi
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <p style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.6;">
+                Merhaba,
+              </p>
+              <p style="margin: 0 0 30px 0; color: #333333; font-size: 16px; line-height: 1.6;">
+                <strong>${petName}</strong> için size yeni bir iletişim mesajı geldi.
+              </p>
+              
+              <!-- Message Box -->
+              <div style="background-color: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                <p style="margin: 0 0 15px 0; color: #666666; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
+                  Mesaj
+                </p>
+                <p style="margin: 0; color: #333333; font-size: 16px; line-height: 1.8; white-space: pre-wrap;">
+${message.replace(/\n/g, '<br>')}
+                </p>
+              </div>
+              
+              <!-- Sender Info -->
+              <div style="background-color: #ffffff; border: 1px solid #e0e0e0; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                <p style="margin: 0 0 10px 0; color: #666666; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
+                  Gönderen Bilgileri
+                </p>
+                <p style="margin: 0; color: #333333; font-size: 16px; line-height: 1.8;">
+                  <strong>E-posta:</strong> <a href="mailto:${senderEmail}" style="color: #667eea; text-decoration: none;">${senderEmail}</a>
+                </p>
+              </div>
+              
+              <!-- Footer Info -->
+              <p style="margin: 30px 0 0 0; color: #999999; font-size: 14px; line-height: 1.6;">
+                Bu mesaj, Dijital Pati platformu aracılığıyla gönderilmiştir. Gönderene doğrudan e-posta ile yanıt verebilirsiniz.
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-top: 1px solid #e0e0e0;">
+              <p style="margin: 0; color: #999999; font-size: 12px; line-height: 1.6;">
+                © ${new Date().getFullYear()} Dijital Pati. Tüm hakları saklıdır.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
 export async function sendContactEmail(data: ContactEmailParams): Promise<ActionResponse> {
   const { petId, ownerId, senderEmail, message } = data;
 
@@ -33,27 +116,44 @@ export async function sendContactEmail(data: ContactEmailParams): Promise<Action
   }
 
   try {
-    // 3. Determine Recipient (Safe Handling for Dev/Test)
-    // TODO: Change this to the pet owner's email after domain verification
-    const toAddress = 'emirhansalman07@gmail.com'; // Temporarily hardcoded for Resend Sandbox mode 
+    // 3. Fetch Pet Information
+    const pet = await getPetById(petId);
+    if (!pet) {
+      return { success: false, error: 'Pet bilgisi bulunamadı.' };
+    }
 
+    // Determine pet name for display
+    const petName = pet.name && pet.name.trim() && !pet.name.startsWith('Pati #')
+      ? pet.name
+      : `Pati #${pet.token_id}`;
+
+    // 4. Determine Recipient (Safe Handling for Dev/Test)
+    // TODO: Change this to the pet owner's email after domain verification
+    const toAddress = 'emirhansalman07@gmail.com'; // Temporarily hardcoded for Resend Sandbox mode
+
+    // 5. Create HTML Email Content
+    const htmlContent = createContactEmailHTML(petName, senderEmail, message);
+    const textContent = `
+Yeni bir mesajınız var!
+
+Gönderen: ${senderEmail}
+İlgili Hayvan: ${petName}
+
+Mesaj:
+${message}
+    `.trim();
+
+    // 6. Send Email
     const { data: emailData, error: resendError } = await resend.emails.send({
       from: 'Dijital Pati <onboarding@resend.dev>',
       to: [toAddress],
       replyTo: senderEmail,
-      subject: `Dijital Pati: İletişim Talebi (Pet ID: ${petId})`,
-      text: `
-        Yeni bir mesajınız var!
-        
-        Gönderen: ${senderEmail}
-        İlgili İlan (Pet ID): ${petId}
-        
-        Mesaj:
-        ${message}
-      `,
+      subject: `Dijital Pati: İletişim Talebi - ${petName}`,
+      html: htmlContent,
+      text: textContent,
     });
 
-    // 4. Handle Resend API Errors
+    // 7. Handle Resend API Errors
     if (resendError) {
       console.error('Resend API Error:', resendError);
 
@@ -65,6 +165,32 @@ export async function sendContactEmail(data: ContactEmailParams): Promise<Action
       }
 
       return { success: false, error: 'E-posta servisi hatası. Lütfen daha sonra tekrar deneyin.' };
+    }
+
+    // 8. Create Notification Record
+    const supabase = await createClient();
+    const notificationMessage = `${senderEmail} size "${petName}" için bir mesaj gönderdi.`;
+    // Use pet.id (UUID) for the link as it's the database primary key
+    const petLink = `/pet/${pet.id}`;
+
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: ownerId,
+        type: 'contact',
+        message: notificationMessage,
+        link: petLink,
+        metadata: {
+          pet_id: petId,
+          pet_name: petName,
+          sender_email: senderEmail,
+        },
+      });
+
+    if (notificationError) {
+      console.error('Notification creation error:', notificationError);
+      // Don't fail the entire operation if notification creation fails
+      // Email was sent successfully, notification is just a bonus
     }
 
     return { success: true, message: 'Email sent successfully' };
