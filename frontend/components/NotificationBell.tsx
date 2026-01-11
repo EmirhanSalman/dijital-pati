@@ -80,12 +80,14 @@ export default function NotificationBell({ notifications: initialNotifications }
   // Realtime subscription kur
   useEffect(() => {
     let mounted = true;
+    let channel: ReturnType<typeof createClient>['channel'] | null = null;
+    let supabaseInstance: ReturnType<typeof createClient> | null = null;
 
     const setupRealtimeSubscription = async () => {
-      const supabase = createClient();
+      supabaseInstance = createClient();
       const {
         data: { user },
-      } = await supabase.auth.getUser();
+      } = await supabaseInstance.auth.getUser();
 
       if (!user || !mounted) {
         return;
@@ -93,11 +95,21 @@ export default function NotificationBell({ notifications: initialNotifications }
 
       // Mevcut subscription'ı temizle
       if (subscriptionRef.current) {
-        await subscriptionRef.current.unsubscribe();
+        try {
+          await subscriptionRef.current.unsubscribe();
+          if (supabaseInstance) {
+            await supabaseInstance.removeChannel(subscriptionRef.current);
+          }
+        } catch (error) {
+          console.error("Error unsubscribing from previous channel:", error);
+        }
+        subscriptionRef.current = null;
       }
 
       // Yeni subscription oluştur
-      const channel = supabase
+      if (!supabaseInstance || !mounted) return;
+
+      channel = supabaseInstance
         .channel(`notifications:${user.id}`)
         .on(
           "postgres_changes",
@@ -121,16 +133,44 @@ export default function NotificationBell({ notifications: initialNotifications }
           }
         });
 
-      subscriptionRef.current = channel;
+      // Store channel in ref only if still mounted
+      if (mounted && channel) {
+        subscriptionRef.current = channel;
+      } else {
+        // If unmounted during setup, clean up immediately
+        if (channel && supabaseInstance) {
+          try {
+            await channel.unsubscribe();
+            await supabaseInstance.removeChannel(channel);
+          } catch (error) {
+            console.error("Error cleaning up channel after unmount:", error);
+          }
+        }
+      }
     };
 
     setupRealtimeSubscription();
 
-    // Cleanup
+    // Cleanup function - properly unsubscribe and remove channel
     return () => {
       mounted = false;
+      
+      // Cleanup subscription synchronously where possible
       if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
+        const channelToCleanup = subscriptionRef.current;
+        subscriptionRef.current = null;
+        
+        // Unsubscribe and remove channel (fire and forget in cleanup)
+        channelToCleanup
+          .unsubscribe()
+          .then(() => {
+            if (supabaseInstance) {
+              return supabaseInstance.removeChannel(channelToCleanup);
+            }
+          })
+          .catch((error) => {
+            console.error("Error cleaning up subscription:", error);
+          });
       }
     };
   }, []);
