@@ -42,7 +42,7 @@ export default function PetCard({ pet }: PetCardProps) {
   const handleDetailsClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    router.push(`/lost-pets/${petId}`);
+    router.push(`/pet/${petId}`);
   };
 
   return (
