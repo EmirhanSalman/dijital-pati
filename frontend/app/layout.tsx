@@ -4,8 +4,9 @@ import { Outfit } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import NextTopLoader from "nextjs-toploader";
+import LazyGlobalComponents from "@/components/LazyGlobalComponents";
 
-/* Lazy load below-the-fold and non-critical UI to improve LCP and reduce TBT */
+/* Lazy load below-the-fold Footer (ssr: true is allowed in Server Components) */
 const Footer = dynamic(() => import("@/components/Footer"), {
   ssr: true,
   loading: () => (
@@ -16,21 +17,6 @@ const Footer = dynamic(() => import("@/components/Footer"), {
     </footer>
   ),
 });
-
-const Toaster = dynamic(
-  () => import("sonner").then((mod) => ({ default: mod.Toaster })),
-  { ssr: false }
-);
-
-const SpeedInsights = dynamic(
-  () => import("@vercel/speed-insights/next").then((mod) => mod.SpeedInsights),
-  { ssr: false }
-);
-
-const Analytics = dynamic(
-  () => import("@vercel/analytics/react").then((mod) => mod.Analytics),
-  { ssr: false }
-);
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -62,9 +48,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <Footer />
         </div>
-        <Toaster />
-        <SpeedInsights />
-        <Analytics />
+        <LazyGlobalComponents />
       </body>
     </html>
   );
