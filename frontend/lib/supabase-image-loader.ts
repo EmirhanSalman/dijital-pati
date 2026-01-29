@@ -16,16 +16,11 @@ interface LoaderParams {
 }
 
 export default function supabaseLoader({ src, width, quality = 75 }: LoaderParams): string {
-  // If src starts with /, it's a local public folder image - use Next.js built-in optimization
-  // Construct the Next.js image optimization API URL
+  // Local paths: return as-is so the browser loads them directly.
+  // - Static imports become /_next/static/media/xxx.png (must not be wrapped in /_next/image or we get 404)
+  // - Public folder paths like /images/xxx.png also work when returned as-is
   if (src.startsWith('/')) {
-    // Use Next.js built-in image optimization for public folder images
-    const params = new URLSearchParams({
-      url: src,
-      w: width.toString(),
-      q: quality.toString(),
-    });
-    return `/_next/image?${params.toString()}`;
+    return src;
   }
 
   // If src is already a full URL (starts with http:// or https://)
