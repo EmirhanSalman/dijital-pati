@@ -4,7 +4,7 @@ import { useRef } from "react";
 import Image from "next/image";
 import { motion, useInView } from "framer-motion";
 
-import storyParkImg from "@/public/images/story-park.png";
+import storyParkImg from "@/public/images/story-park.webp";
 
 interface StepProps {
   number: number;
