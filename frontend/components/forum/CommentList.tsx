@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import DeleteButton from "./DeleteButton";
 import { deleteComment } from "@/app/actions/admin";
 import { MessageSquare } from "lucide-react";
+import { formatDateTimeTR } from "@/lib/utils/date";
 
 interface CommentListProps {
   postId: string;
@@ -21,16 +22,7 @@ export default async function CommentList({ postId }: CommentListProps) {
   } = await supabase.auth.getUser();
   const currentUserId = user?.id || null;
 
-  // Tarihi formatla
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   // Kullanıcının baş harflerini al
   const getUserInitials = (fullName: string | null, username: string | null) => {
@@ -85,7 +77,7 @@ export default async function CommentList({ postId }: CommentListProps) {
                         "Anonim"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {formatDate(comment.created_at)}
+                      {formatDateTimeTR(comment.created_at)}
                     </p>
                   </div>
                 </div>

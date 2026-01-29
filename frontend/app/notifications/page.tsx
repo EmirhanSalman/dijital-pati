@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { formatDateTimeTR } from "@/lib/utils/date";
 import {
   markNotificationAsRead,
   markAllNotificationsAsRead,
@@ -176,13 +177,7 @@ export default function NotificationsPage() {
     if (diffInSeconds < 604800)
       return `${Math.floor(diffInSeconds / 86400)} gün önce`;
 
-    return date.toLocaleDateString("tr-TR", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDateTimeTR(date);
   };
 
   const getNotificationIcon = (type: Notification["type"]) => {

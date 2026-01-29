@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, Newspaper, ArrowRight } from "lucide-react";
 import Image from "next/image";
 import DeleteButton from "@/components/forum/DeleteButton";
+import { formatDateTR } from "@/lib/utils/date";
 
 export const dynamic = "force-dynamic";
 
@@ -12,14 +13,7 @@ export default async function NewsPage() {
   const newsList = await getAllNews();
   const userIsAdmin = await isAdmin();
 
-  // Tarihi formatla
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   // İçeriği kısalt
   const truncateContent = (content: string, maxLength: number = 150) => {
@@ -91,7 +85,7 @@ export default async function NewsPage() {
                 <CardHeader>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                     <Calendar className="h-4 w-4" />
-                    <span>{formatDate(news.created_at)}</span>
+                    <span>{formatDateTR(news.created_at, { year: "numeric", month: "long", day: "numeric" })}</span>
                   </div>
                   <CardTitle className="line-clamp-2 text-xl">
                     {news.title}

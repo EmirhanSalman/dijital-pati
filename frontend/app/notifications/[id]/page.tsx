@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { ArrowLeft, Mail, MapPin, ExternalLink } from "lucide-react";
 import type { Notification } from "@/lib/supabase/server";
+import { formatDateTimeTR } from "@/lib/utils/date";
 
 interface NotificationDetailPageProps {
   params: Promise<{ id: string }>;
@@ -77,13 +78,7 @@ export default async function NotificationDetailPage({ params }: NotificationDet
         <div className="mb-8">
           <h1 className="text-4xl md:text-5xl font-bold mb-2">Bildirim Detayı</h1>
           <p className="text-lg text-muted-foreground">
-            {new Date(notification.created_at).toLocaleDateString("tr-TR", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {formatDateTimeTR(notification.created_at)}
           </p>
         </div>
 

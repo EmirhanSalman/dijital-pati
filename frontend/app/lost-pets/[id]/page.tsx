@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { getPetById, createClient, getUserProfile } from "@/lib/supabase/server";
 import RemoteImage from "@/components/ui/RemoteImage";
 import { resolveImageUrl } from "@/lib/image-utils";
+import { formatDateTR } from "@/lib/utils/date";
 
 interface LostPetDetailPageProps {
   params: Promise<{ id: string }>;
@@ -56,17 +57,12 @@ export default async function LostPetDetailPage({ params }: LostPetDetailPagePro
     ? pet.name 
     : `Pati #${pet.token_id}`;
 
-  // Tarihi formatla
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   // Son görülme tarihi (updated_at veya created_at)
-  const lastSeenDate = pet.updated_at ? formatDate(pet.updated_at) : formatDate(pet.created_at);
+  const lastSeenDate = pet.updated_at 
+    ? formatDateTR(pet.updated_at, { year: "numeric", month: "long", day: "numeric" })
+    : formatDateTR(pet.created_at, { year: "numeric", month: "long", day: "numeric" });
 
   // İletişim bilgilerini hazırla
   const hasContactInfo = !!(pet.contact_phone || pet.contact_email);

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getUserProfile, getUserThreads } from "@/lib/supabase/server";
+import { formatDateTR } from "@/lib/utils/date";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -56,18 +57,10 @@ export default async function ProfilePage() {
   // Kayıt tarihini formatla
   const getFormattedDate = () => {
     if (profile?.created_at) {
-      return new Date(profile.created_at).toLocaleDateString("tr-TR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+      return formatDateTR(profile.created_at, { year: "numeric", month: "long", day: "numeric" });
     }
     if (user.created_at) {
-      return new Date(user.created_at).toLocaleDateString("tr-TR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+      return formatDateTR(user.created_at, { year: "numeric", month: "long", day: "numeric" });
     }
     return "Bilinmiyor";
   };

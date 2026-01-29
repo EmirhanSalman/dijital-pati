@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Plus, Newspaper, Calendar, ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import DeleteButton from "@/components/forum/DeleteButton";
+import { formatDateTimeTR } from "@/lib/utils/date";
 
 export default async function AdminNewsPage() {
   const supabase = await createClient();
@@ -25,15 +26,7 @@ export default async function AdminNewsPage() {
 
   const newsList = await getAllNews(true); // Admin için tüm haberleri getir (aktif + pasif)
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12">
@@ -100,7 +93,7 @@ export default async function AdminNewsPage() {
                   <CardTitle className="line-clamp-2">{news.title}</CardTitle>
                   <CardDescription className="flex items-center gap-2">
                     <Calendar className="h-3 w-3" />
-                    {formatDate(news.created_at)}
+                    {formatDateTimeTR(news.created_at)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

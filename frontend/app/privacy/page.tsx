@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, Eye, Lock, FileText } from "lucide-react";
+import { formatDateTR } from "@/lib/utils/date";
 
 export default function PrivacyPage() {
   return (
@@ -9,11 +10,7 @@ export default function PrivacyPage() {
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">Gizlilik Politikası</h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Son güncelleme: {new Date().toLocaleDateString("tr-TR", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+            Son güncelleme: {formatDateTR(new Date(), { year: "numeric", month: "long", day: "numeric" })}
           </p>
         </div>
 

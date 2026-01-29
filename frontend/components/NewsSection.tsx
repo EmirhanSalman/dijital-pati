@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, ArrowRight, Newspaper } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { formatDateTR } from "@/lib/utils/date";
 
 interface NewsItem {
   id: string;
@@ -29,14 +30,7 @@ export default async function NewsSection() {
     return null;
   }
 
-  // Tarihi formatla
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   // İçeriği kısalt
   const truncateContent = (content: string, maxLength: number = 150) => {
@@ -73,7 +67,7 @@ export default async function NewsSection() {
               <CardHeader>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                   <Calendar className="h-4 w-4" />
-                  <span>{formatDate(item.created_at)}</span>
+                  <span>{formatDateTR(item.created_at, { year: "numeric", month: "long", day: "numeric" })}</span>
                 </div>
                 <CardTitle className="line-clamp-2">{item.title}</CardTitle>
               </CardHeader>

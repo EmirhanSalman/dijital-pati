@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Calendar, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { formatDateTimeTR } from "@/lib/utils/date";
 
 interface UserThreadsTabProps {
   userId: string;
@@ -12,15 +13,7 @@ interface UserThreadsTabProps {
 export default async function UserThreadsTab({ userId }: UserThreadsTabProps) {
   const threads = await getUserThreads(userId);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   const getUserInitials = (fullName: string | null, username: string | null) => {
     if (fullName) {
@@ -73,7 +66,7 @@ export default async function UserThreadsTab({ userId }: UserThreadsTabProps) {
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
-                    <span>{formatDate(thread.created_at)}</span>
+                    <span>{formatDateTimeTR(thread.created_at)}</span>
                   </div>
                   {thread.category && (
                     <span className="px-2 py-1 bg-primary/10 text-primary rounded-md text-xs">

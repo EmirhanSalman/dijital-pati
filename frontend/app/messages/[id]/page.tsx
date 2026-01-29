@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Phone, MapPin, Mail, User, Calendar, MessageSquare } from "lucide-react";
 import Link from "next/link";
+import { formatDateTimeTR } from "@/lib/utils/date";
+import { formatDateTimeTR } from "@/lib/utils/date";
 
 interface ContactMessage {
   id: string;
@@ -97,15 +99,8 @@ export default async function MessageDetailPage({
       .eq("owner_id", user.id);
   }
 
-  // Tarih formatla
-  const messageDate = new Date(messageData.created_at);
-  const formattedDate = messageDate.toLocaleDateString("tr-TR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  // Tarih formatla - using optimized utility to avoid timezone queries
+  const formattedDate = formatDateTimeTR(messageData.created_at);
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12">

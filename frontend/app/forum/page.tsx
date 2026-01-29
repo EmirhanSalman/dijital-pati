@@ -9,6 +9,7 @@ import ForumFilters from "@/components/forum/ForumFilters";
 import VoteControl from "@/components/forum/VoteControl";
 import EmptyState from "@/components/ui/empty-state";
 import { Suspense } from "react";
+import { formatDateTimeTR } from "@/lib/utils/date";
 
 interface ForumPageProps {
   searchParams: Promise<{ q?: string; cat?: string; sort?: string }>;
@@ -28,16 +29,7 @@ export default async function ForumPage({ searchParams }: ForumPageProps) {
   // Forum gönderilerini çek (filtrelerle)
   const posts = await getForumPosts(search, category, sort);
 
-  // Tarihi formatla
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   // İçeriği kısalt
   const truncateContent = (content: string, maxLength: number = 200) => {
@@ -124,7 +116,7 @@ export default async function ForumPage({ searchParams }: ForumPageProps) {
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
-                          <span>{formatDate(post.created_at)}</span>
+                          <span>{formatDateTimeTR(post.created_at)}</span>
                         </div>
                         {post.category && (
                           <span className="px-2 py-1 bg-primary/10 text-primary rounded-md text-xs">

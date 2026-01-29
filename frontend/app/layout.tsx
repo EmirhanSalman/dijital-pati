@@ -12,6 +12,7 @@ const outfit = Outfit({
   subsets: ["latin"],
   display: "swap", // Prevent FOUT (Flash of Unstyled Text)
   preload: true, // Preload font for better performance
+  variable: "--font-outfit", // CSS variable for font
 });
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({
           <Footer />
         </div>
         <Toaster />
+        {/* Lazy load analytics to reduce TBT */}
         <SpeedInsights />
         <Analytics />
       </body>

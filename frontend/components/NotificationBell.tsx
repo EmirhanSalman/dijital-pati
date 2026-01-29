@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Notification } from "@/lib/supabase/server";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { X } from "lucide-react";
+import { formatRelativeDateTR } from "@/lib/utils/date";
 
 interface NotificationBellProps {
   notifications: Notification[];
@@ -239,21 +240,8 @@ export default function NotificationBell({ notifications: initialNotifications }
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (diffInSeconds < 60) return "Az önce";
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} dakika önce`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} saat önce`;
-    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} gün önce`;
-    
-    return date.toLocaleDateString("tr-TR", {
-      day: "numeric",
-      month: "short",
-    });
-  };
+  // Using optimized utility to avoid timezone queries
+  const formatDate = formatRelativeDateTR;
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {

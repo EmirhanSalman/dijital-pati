@@ -10,6 +10,7 @@ import DeleteButton from "@/components/forum/DeleteButton";
 import nextDynamic from "next/dynamic";
 import type { Metadata } from "next";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateTimeTR } from "@/lib/utils/date";
 
 // Lazy load comment components to reduce initial bundle size and hydration cost
 const CommentList = nextDynamic(() => import("@/components/forum/CommentList"), {
@@ -106,16 +107,7 @@ export default async function ForumPostDetailPage({ params }: ForumPostDetailPag
     );
   }
 
-  // Tarihi formatla
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   // Kullanıcının baş harflerini al
   const getUserInitials = (fullName: string | null, username: string | null) => {
@@ -181,7 +173,7 @@ export default async function ForumPostDetailPage({ params }: ForumPostDetailPag
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              <span>{formatDate(post.created_at)}</span>
+              <span>{formatDateTimeTR(post.created_at)}</span>
             </div>
             {post.category && (
               <span className="px-3 py-1 bg-primary/10 text-primary rounded-md text-sm font-medium">

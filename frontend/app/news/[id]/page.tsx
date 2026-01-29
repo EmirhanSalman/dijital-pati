@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Calendar, User, AlertCircle } from "lucide-react";
+import { formatDateTimeTR } from "@/lib/utils/date";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getNewsById, isAdmin } from "@/lib/supabase/server";
@@ -45,16 +46,7 @@ export default async function NewsDetailPage({ params }: NewsDetailPageProps) {
     );
   }
 
-  // Tarihi formatla
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("tr-TR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  // Tarihi formatla - using optimized utility to avoid timezone queries
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -99,7 +91,7 @@ export default async function NewsDetailPage({ params }: NewsDetailPageProps) {
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              <span>{formatDate(news.created_at)}</span>
+              <span>{formatDateTimeTR(news.created_at)}</span>
             </div>
             {news.author_name && (
               <div className="flex items-center gap-2">
