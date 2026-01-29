@@ -8,7 +8,11 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "sonner";
 
-const outfit = Outfit({ subsets: ["latin"] });
+const outfit = Outfit({ 
+  subsets: ["latin"],
+  display: "swap", // Prevent FOUT (Flash of Unstyled Text)
+  preload: true, // Preload font for better performance
+});
 
 export const metadata: Metadata = {
   title: "DijitalPati - Blockchain Evcil Hayvan Takip Sistemi",

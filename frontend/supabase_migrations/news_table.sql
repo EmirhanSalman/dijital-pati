@@ -110,3 +110,4 @@ CREATE POLICY "Only admins can delete news"
 
 
 
+

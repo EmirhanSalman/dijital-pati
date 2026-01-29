@@ -13,3 +13,4 @@ ALTER TABLE public.notifications
 ADD CONSTRAINT notifications_type_check 
 CHECK (type IN ('reply', 'lost_pet_found', 'mention', 'system', 'contact'));
 
+

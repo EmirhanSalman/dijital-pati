@@ -21,3 +21,4 @@ CREATE INDEX IF NOT EXISTS idx_profiles_wallet_address ON public.profiles(wallet
 
 
 
+

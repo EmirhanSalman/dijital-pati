@@ -1,0 +1,231 @@
+[33mcommit 5223947b39c7f8f23f55c32696989f3170a20a84[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 24 16:45:47 2025 +0300
+
+    feat: project build success! production ready
+
+[33mcommit 8047f1ae49cf4f6a86910b63da34a253aeb2628d[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 24 15:38:16 2025 +0300
+
+    fix: update contract ABI and address
+
+[33mcommit 0ebb351f7075f59a21cd7dba20bd1059f3d5e05a[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 05:01:29 2025 +0300
+
+    Day 1 final: Secure wallet setup and env config completed
+
+[33mcommit 17abec37f7e20f7ad4a21e0341a7076229865c2f[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 03:55:28 2025 +0300
+
+    Fix: Absolute synchronization between Blockchain token_id and Supabase
+
+[33mcommit 0e393162311605bcea77e1d30d0afda19708a16e[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 03:47:00 2025 +0300
+
+    Final Fix: Dynamic contract address from Environment Variables
+
+[33mcommit 2749bbc90094dea9d2453557dd54bd0d97220324[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 03:36:16 2025 +0300
+
+    Fix: resolve BigInt literal build error by targeting ES2020 or using BigInt constructor
+
+[33mcommit 0e9016e5d766ab250c81e5bdd12160f27315748e[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 03:33:19 2025 +0300
+
+    Fix: Token ID extraction from ERC-721 events and IPFS fallback logic
+
+[33mcommit 8ea61a170bce2d9981900194818105cc8815c221[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 03:24:26 2025 +0300
+
+    IPFS service synced with Vercel env variables
+
+[33mcommit 47d2d936fd53e3046896e7af80361e9340b0181b[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 03:04:18 2025 +0300
+
+    Proje son durumu güncellendi ve yedeklendi
+
+[33mcommit 514a1a1bcb098c2003462ddc5b57cbbe0f6fcae0[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 00:44:44 2025 +0300
+
+    chore: replace default favicon.ico with custom branding
+
+[33mcommit e13f3abe93d357567b29286848538ecc438efb83[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 00:36:44 2025 +0300
+
+    feat: update favicon with custom logo
+
+[33mcommit c1a76c37e94a4d2e3f811bb2696516f17ba26ea6[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 00:26:47 2025 +0300
+
+    feat: add empty states, custom 404, dynamic favicon and analytics
+
+[33mcommit 39bb24719237e173f22380b696255ad380e7e7d6[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 00:14:47 2025 +0300
+
+    fix: remove ssr:false from server component dynamic imports
+
+[33mcommit d71fe492a73a295b4bba45d96616688d4b4d8a74[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 23 00:06:34 2025 +0300
+
+    perf: lazy load heavy components and optimize form states for better INP
+
+[33mcommit accb08fd1b8b4457db89afbe9e5bbcd89dace053[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 23:55:42 2025 +0300
+
+    fix: switch forum page to dynamic rendering to solve 500 error
+
+[33mcommit 5727b2fd837f2697f22d30345b39bc3b2eb29c58[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 23:46:30 2025 +0300
+
+    perf: optimize images with sizes and priority for mobile INP
+
+[33mcommit e6fc328e37f2c57fbb7d2298a9381b66e18adf10[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 23:35:34 2025 +0300
+
+    style: apply outfit font and custom scrollbar
+
+[33mcommit 8dc0318ece521cac250ed17002ccc51aefe72ab3[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 17:03:46 2025 +0300
+
+    perf: optimize forum pages with ISR and parallel fetching
+
+[33mcommit dcb77470d781dbeb8930d241dc3f343d54215f3f[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 16:36:54 2025 +0300
+
+    feat: integrate vercel speed insights
+
+[33mcommit b52278a12eded553513290a3a03540ec7a95594f[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 16:32:24 2025 +0300
+
+    feat: enforce strong password policy (NIST/OWASP standards)
+
+[33mcommit 45e5d623f01af9cff293777017121b9bcbb4f034[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 16:26:15 2025 +0300
+
+    fix: trim whitespace from password inputs to prevent login errors
+
+[33mcommit 8de8d946a53013d21ee16be125049d3e556ef73c[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 16:14:36 2025 +0300
+
+    fix: implement server-side PKCE auth flow for password reset
+
+[33mcommit 3c0c0f832f1899fb27ed454826e5a1581cb8ae75[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 16:09:39 2025 +0300
+
+    fix: add suspense and auth code exchange to reset password
+
+[33mcommit 1565bfcbdfcd1b5fc0ceda361e3849fec47691f2[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 16:05:08 2025 +0300
+
+    feat: complete auth flow with reset password page
+
+[33mcommit a6fdc17ab512cbcdc0406b84b369fbb74a4c72f5[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Mon Dec 22 16:00:07 2025 +0300
+
+    feat: add forgot password page and fix console errors
+
+[33mcommit 220d2acf9fb9bec78c17ffcefd8e0e513660692c[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 13:08:34 2025 +0300
+
+    chore: update next.js to latest version for security fix
+
+[33mcommit ccde56faabf1f093afed72498a82a178ffa7c9ea[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 13:03:08 2025 +0300
+
+    chore: build success! ready for production
+
+[33mcommit 7fa6cb285b639e8b442fb69948b620d53a592dc0[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 00:55:33 2025 +0300
+
+    fix: initialize searchTimeoutRef with null
+
+[33mcommit ce7380bbbf7e8d58572c286f188e73f6eefdda2b[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 00:49:25 2025 +0300
+
+    fix: add contact_request and location_alert to Notification type
+
+[33mcommit 278b5125dcc9953975f1403e78be796aca790c14[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 00:41:05 2025 +0300
+
+    fix: NewsItem interface updated for build
+
+[33mcommit d020ec67418d1f3aa2f6d319b8fb89934df655ac[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 00:36:23 2025 +0300
+
+    fix: apply null check to ALL getUserInitials usages globally
+
+[33mcommit b91e2245177fbe8da5358348c4cba052d36150e4[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 00:29:55 2025 +0300
+
+    fix: handle undefined types for getUserInitials
+
+[33mcommit 71514736e7d38b0732a3a877475a5f32e4facb3f[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 00:27:38 2025 +0300
+
+    fix: ForumPost type definition updated for build
+
+[33mcommit c233219ec5ec362740588c5090555b703195298d[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 17 00:12:41 2025 +0300
+
+    deploy: hazirlik
+
+[33mcommit 6d2e1385cdaed6e8598c6e06c41de162e7fa3e8b[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 16 23:37:55 2025 +0300
+
+    fix: Supabase RLS bypass (Service Role) added & feat: Notification UI updated with dynamic pet names
+
+[33mcommit dbc7a372f46276d1dc64b1bb3db7c204c954d0c8[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Tue Dec 16 20:07:08 2025 +0300
+
+    Stable Release V1.0: Gereksiz butonlar silindi, UI temizlendi. Her sey calisiyor.
+
+[33mcommit ad454e1d8be924c4ddc552c53aa3a3d5a124ddac[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 10 22:14:58 2025 +0300
+
+    Refactor: Sehir listesi merkezilestirildi (81 il), create-pet ve filterbar senkronize edildi
+
+[33mcommit f911712a833ab147f20663143e9a2ffe2db412a1[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 10 21:33:26 2025 +0300
+
+    Feat: Gelismis arama ve filtreleme modulu eklendi (FilterBar + URL Params + Supabase Query)
+
+[33mcommit 8504911e92804f940bd8b2eec6b8fa8513a80b03[m
+Author: EmirhanSalman <emirhansalman07@gmail.com>
+Date:   Wed Dec 10 21:10:49 2025 +

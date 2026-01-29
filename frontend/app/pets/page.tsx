@@ -65,7 +65,7 @@ export default async function PetsPage({ searchParams }: PetsPageProps) {
 
         {/* Pet Listesi */}
         {pets.length === 0 ? (
-          <div className="max-w-md mx-auto">
+          <div className="max-w-md mx-auto min-h-[400px] flex items-center justify-center">
             {params.query || params.type || params.city ? (
               <Card className="border-2">
                 <CardContent className="pt-6 text-center py-12">
@@ -89,7 +89,7 @@ export default async function PetsPage({ searchParams }: PetsPageProps) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 min-h-[600px]">
               {pets.map((pet) => (
                 <PetCard key={pet.id || pet.token_id} pet={pet} />
               ))}

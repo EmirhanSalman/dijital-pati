@@ -90,15 +90,18 @@ export default function HowItWorks() {
                 duration: 0.8,
                 ease: [0.4, 0, 0.2, 1],
               }}
-              className="relative w-full h-[600px] rounded-2xl overflow-hidden shadow-2xl"
+              className="relative w-full rounded-2xl overflow-hidden shadow-2xl"
+              style={{ aspectRatio: '3/2' }}
             >
               <Image
                 src="/images/story-park.png"
                 alt="Nasıl Çalışır"
-                fill
-                className="object-cover rounded-2xl shadow-2xl"
+                width={1200}
+                height={800}
+                className="object-cover rounded-2xl shadow-2xl w-full h-full"
                 sizes="(max-width: 1024px) 100vw, 50vw"
-                quality={90}
+                quality={85}
+                priority
               />
               {/* Overlay gradient for better text contrast */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none z-10" />
@@ -115,15 +118,18 @@ export default function HowItWorks() {
                 duration: 0.8,
                 ease: [0.4, 0, 0.2, 1],
               }}
-              className="relative w-full h-[500px] rounded-2xl overflow-hidden shadow-2xl max-w-md mx-auto"
+              className="relative w-full rounded-2xl overflow-hidden shadow-2xl max-w-md mx-auto"
+              style={{ aspectRatio: '3/2' }}
             >
               <Image
                 src="/images/story-park.png"
                 alt="Nasıl Çalışır"
-                fill
-                className="object-cover rounded-2xl shadow-2xl"
-                sizes="100vw"
-                quality={90}
+                width={800}
+                height={533}
+                className="object-cover rounded-2xl shadow-2xl w-full h-full"
+                sizes="(max-width: 768px) 100vw, 768px"
+                quality={85}
+                priority
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none z-10" />
             </motion.div>

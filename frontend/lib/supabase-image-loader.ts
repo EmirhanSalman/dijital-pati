@@ -16,6 +16,18 @@ interface LoaderParams {
 }
 
 export default function supabaseLoader({ src, width, quality = 75 }: LoaderParams): string {
+  // If src starts with /, it's a local public folder image - use Next.js built-in optimization
+  // Construct the Next.js image optimization API URL
+  if (src.startsWith('/')) {
+    // Use Next.js built-in image optimization for public folder images
+    const params = new URLSearchParams({
+      url: src,
+      w: width.toString(),
+      q: quality.toString(),
+    });
+    return `/_next/image?${params.toString()}`;
+  }
+
   // If src is already a full URL (starts with http:// or https://)
   if (src.startsWith('http://') || src.startsWith('https://')) {
     // Check if it's a Supabase URL
@@ -68,4 +80,5 @@ export default function supabaseLoader({ src, width, quality = 75 }: LoaderParam
 
   return url.toString();
 }
+
 
