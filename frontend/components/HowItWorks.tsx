@@ -4,6 +4,8 @@ import { useRef } from "react";
 import Image from "next/image";
 import { motion, useInView } from "framer-motion";
 
+import storyParkImg from "@/public/images/story-park.png";
+
 interface StepProps {
   number: number;
   title: string;
@@ -81,7 +83,7 @@ export default function HowItWorks() {
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-start">
           {/* Left Side - Sticky Image (Desktop) */}
-          <div className="hidden lg:block lg:sticky lg:top-32 lg:self-start">
+          <div className="hidden lg:block lg:sticky lg:top-32 lg:self-start w-full">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               whileInView={{ opacity: 1, scale: 1 }}
@@ -90,15 +92,13 @@ export default function HowItWorks() {
                 duration: 0.8,
                 ease: [0.4, 0, 0.2, 1],
               }}
-              className="relative w-full rounded-2xl overflow-hidden shadow-2xl"
-              style={{ aspectRatio: '3/2' }}
+              className="relative w-full h-[500px] min-h-[400px] rounded-2xl overflow-hidden shadow-2xl"
             >
               <Image
-                src="/images/story-park.png"
+                src={storyParkImg}
                 alt="Nasıl Çalışır"
-                width={1200}
-                height={800}
-                className="object-cover rounded-2xl shadow-2xl w-full h-full"
+                fill
+                className="object-cover rounded-2xl shadow-2xl"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 quality={85}
                 priority
@@ -109,7 +109,7 @@ export default function HowItWorks() {
           </div>
 
           {/* Mobile Image */}
-          <div className="lg:hidden mb-12">
+          <div className="lg:hidden mb-12 w-full">
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -118,15 +118,13 @@ export default function HowItWorks() {
                 duration: 0.8,
                 ease: [0.4, 0, 0.2, 1],
               }}
-              className="relative w-full rounded-2xl overflow-hidden shadow-2xl max-w-md mx-auto"
-              style={{ aspectRatio: '3/2' }}
+              className="relative w-full h-[400px] min-h-[320px] rounded-2xl overflow-hidden shadow-2xl max-w-md mx-auto"
             >
               <Image
-                src="/images/story-park.png"
+                src={storyParkImg}
                 alt="Nasıl Çalışır"
-                width={800}
-                height={533}
-                className="object-cover rounded-2xl shadow-2xl w-full h-full"
+                fill
+                className="object-cover rounded-2xl shadow-2xl"
                 sizes="(max-width: 768px) 100vw, 768px"
                 quality={85}
                 priority
