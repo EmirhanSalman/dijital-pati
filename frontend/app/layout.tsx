@@ -1,18 +1,42 @@
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 import { Outfit } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import NextTopLoader from "nextjs-toploader";
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Analytics } from "@vercel/analytics/react";
-import { Toaster } from "sonner";
 
-const outfit = Outfit({ 
+/* Lazy load below-the-fold and non-critical UI to improve LCP and reduce TBT */
+const Footer = dynamic(() => import("@/components/Footer"), {
+  ssr: true,
+  loading: () => (
+    <footer className="border-t bg-background">
+      <div className="container mx-auto px-4 py-12">
+        <div className="h-32 bg-slate-100/30 animate-pulse rounded" />
+      </div>
+    </footer>
+  ),
+});
+
+const Toaster = dynamic(
+  () => import("sonner").then((mod) => ({ default: mod.Toaster })),
+  { ssr: false }
+);
+
+const SpeedInsights = dynamic(
+  () => import("@vercel/speed-insights/next").then((mod) => mod.SpeedInsights),
+  { ssr: false }
+);
+
+const Analytics = dynamic(
+  () => import("@vercel/analytics/react").then((mod) => mod.Analytics),
+  { ssr: false }
+);
+
+const outfit = Outfit({
   subsets: ["latin"],
-  display: "swap", // Prevent FOUT (Flash of Unstyled Text)
-  preload: true, // Preload font for better performance
-  variable: "--font-outfit", // CSS variable for font
+  display: "swap",
+  preload: true,
+  variable: "--font-outfit",
 });
 
 export const metadata: Metadata = {
@@ -39,7 +63,6 @@ export default function RootLayout({
           <Footer />
         </div>
         <Toaster />
-        {/* Lazy load analytics to reduce TBT */}
         <SpeedInsights />
         <Analytics />
       </body>
