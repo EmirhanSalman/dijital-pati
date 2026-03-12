@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@dijital-pati/app"],
+
   images: {
     loader: "custom",
     loaderFile: "./lib/supabase-image-loader.ts",

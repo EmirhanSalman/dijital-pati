@@ -1,4 +1,19 @@
 {
+  "name": "dijital-pati",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "web": "npm run dev --workspace=apps/next",
+    "mobile": "npm run start --workspace=apps/expo",
+    "dev": "concurrently \"npm run web\" \"npm run mobile\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
   "dependencies": {
     "react-qr-code": "^2.0.18",
     "sharp": "^0.34.5"
