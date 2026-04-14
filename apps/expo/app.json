@@ -23,10 +23,12 @@
       },
       "predictiveBackGestureEnabled": false
     },
+    "scheme": "dijitalpati",
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-router",
       "expo-asset",
       "expo-font"
     ]

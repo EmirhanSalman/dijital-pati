@@ -1,6 +1,26 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "../../node_modules/expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
-  }
+    "strict": true,
+    "baseUrl": ".",
+    "jsxImportSource": "nativewind",
+    "types": [
+      "nativewind/types",
+      "expo-router/types"
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@dijital-pati/app/*": [
+        "../../packages/app/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "app-env.d.ts",
+    "nativewind-env.d.ts"
+  ]
 }
