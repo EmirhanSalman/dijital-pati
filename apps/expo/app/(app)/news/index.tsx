@@ -38,7 +38,7 @@ export default function NewsScreen() {
             <View style={styles.cardContent}>
               <View style={styles.cardTop}>
                 {item.image_url ? (
-                  <Image source={{ uri: item.image_url }} style={{ width: 24, height: 24, borderRadius: 12 }} />
+                  <Image source={{ uri: item.image_url.replace('ipfs://', 'https://ipfs.io/ipfs/') }} style={{ width: 24, height: 24, borderRadius: 12 }} />
                 ) : (
                   <Text style={styles.cardEmoji}>📰</Text>
                 )}

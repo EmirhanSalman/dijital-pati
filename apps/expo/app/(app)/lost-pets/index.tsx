@@ -37,7 +37,7 @@ export default function LostPetsScreen() {
             <View style={styles.cardLeft}>
               <View style={styles.emojiCircle}>
                 {pet.image_url ? (
-                  <Image source={{ uri: pet.image_url }} style={styles.petImage} />
+                  <Image source={{ uri: pet.image_url.replace('ipfs://', 'https://ipfs.io/ipfs/') }} style={styles.petImage} />
                 ) : (
                   <Text style={styles.emoji}>🐾</Text>
                 )}
