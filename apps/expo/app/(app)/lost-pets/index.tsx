@@ -1,14 +1,19 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Image } from 'react-native';
 import { MotiView } from 'moti';
-
-const MOCK_PETS = [
-  { id: '1', name: 'Karamel', species: 'Kedi', location: 'Kadıköy, İstanbul', date: '2 saat önce', emoji: '🐱' },
-  { id: '2', name: 'Duman', species: 'Köpek', location: 'Beşiktaş, İstanbul', date: '5 saat önce', emoji: '🐶' },
-  { id: '3', name: 'Pamuk', species: 'Tavşan', location: 'Üsküdar, İstanbul', date: '1 gün önce', emoji: '🐰' },
-  { id: '4', name: 'Zeytin', species: 'Kedi', location: 'Şişli, İstanbul', date: '2 gün önce', emoji: '🐱' },
-];
+import { useState, useEffect } from 'react';
+import { supabase } from '../../../lib/supabase';
 
 export default function LostPetsScreen() {
+  const [pets, setPets] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchPets() {
+      const { data, error } = await supabase.from('pets').select('*');
+      if (data) setPets(data);
+    }
+    fetchPets();
+  }, []);
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <MotiView
@@ -17,13 +22,13 @@ export default function LostPetsScreen() {
         transition={{ type: 'timing', duration: 500 }}
         style={styles.banner}
       >
-        <Text style={styles.bannerTitle}>🔍 {MOCK_PETS.length} Aktif İlan</Text>
+        <Text style={styles.bannerTitle}>🔍 {pets.length} Aktif İlan</Text>
         <Text style={styles.bannerSub}>Bölgenizdeki kayıp hayvanlar</Text>
       </MotiView>
 
-      {MOCK_PETS.map((pet, i) => (
+      {pets.map((pet, i) => (
         <MotiView
-          key={pet.id}
+          key={pet.id || i}
           from={{ opacity: 0, translateX: -20 }}
           animate={{ opacity: 1, translateX: 0 }}
           transition={{ type: 'timing', delay: i * 100, duration: 500 }}
@@ -31,18 +36,22 @@ export default function LostPetsScreen() {
           <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
             <View style={styles.cardLeft}>
               <View style={styles.emojiCircle}>
-                <Text style={styles.emoji}>{pet.emoji}</Text>
+                {pet.image_url ? (
+                  <Image source={{ uri: pet.image_url }} style={styles.petImage} />
+                ) : (
+                  <Text style={styles.emoji}>🐾</Text>
+                )}
               </View>
             </View>
             <View style={styles.cardBody}>
               <Text style={styles.petName}>{pet.name}</Text>
-              <Text style={styles.petSpecies}>{pet.species}</Text>
-              <Text style={styles.petLocation}>📍 {pet.location}</Text>
+              <Text style={styles.petSpecies}>{pet.breed}</Text>
+              <Text style={styles.petLocation}>📍 Bilinmiyor</Text>
             </View>
             <View style={styles.cardRight}>
-              <Text style={styles.date}>{pet.date}</Text>
+              <Text style={styles.date}>Yakın zamanda</Text>
               <View style={styles.urgentBadge}>
-                <Text style={styles.urgentText}>Acil</Text>
+                <Text style={styles.urgentText}>{pet.status || 'Kayıp'}</Text>
               </View>
             </View>
           </Pressable>
@@ -85,7 +94,9 @@ const styles = StyleSheet.create({
   emojiCircle: {
     width: 52, height: 52, borderRadius: 26,
     backgroundColor: '#FFF3EB', alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden',
   },
+  petImage: { width: 52, height: 52 },
   emoji: { fontSize: 26 },
   cardBody: { flex: 1 },
   petName: { fontSize: 17, fontWeight: '700', color: '#1C1C1E', marginBottom: 2 },

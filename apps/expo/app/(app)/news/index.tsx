@@ -1,46 +1,19 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Image } from 'react-native';
 import { MotiView } from 'moti';
-
-const NEWS = [
-  {
-    id: '1',
-    category: 'Sağlık',
-    title: 'Yaz aylarında evcil hayvanlar için 5 temel kural',
-    excerpt: 'Sıcak havalarda evcil dostlarınızı nasıl korursunuz? Veterinerler açıklıyor.',
-    readTime: '3 dk',
-    emoji: '☀️',
-    color: '#FF9500',
-  },
-  {
-    id: '2',
-    category: 'Beslenme',
-    title: 'Kediler için ev yapımı mama tarifleri',
-    excerpt: 'Doğal ve sağlıklı malzemelerle can dostunuza özel yemekler hazırlayın.',
-    readTime: '5 dk',
-    emoji: '🥗',
-    color: '#34C759',
-  },
-  {
-    id: '3',
-    category: 'Eğitim',
-    title: 'Köpeğinize 1 haftada 3 temel komut öğretin',
-    excerpt: 'Pozitif pekiştirme yöntemiyle otur, yat ve gel komutları için adım adım rehber.',
-    readTime: '7 dk',
-    emoji: '🎓',
-    color: '#007AFF',
-  },
-  {
-    id: '4',
-    category: 'Yasal',
-    title: '2025 evcil hayvan sahipliği hakkınız',
-    excerpt: 'Yeni yasa düzenlemeleri ile evcil hayvan sahiplerinin hakları genişledi.',
-    readTime: '4 dk',
-    emoji: '⚖️',
-    color: '#5856D6',
-  },
-];
+import { useState, useEffect } from 'react';
+import { supabase } from '../../../lib/supabase';
 
 export default function NewsScreen() {
+  const [news, setNews] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchNews() {
+      const { data, error } = await supabase.from('news').select('*');
+      if (data) setNews(data);
+    }
+    fetchNews();
+  }, []);
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <MotiView
@@ -53,25 +26,29 @@ export default function NewsScreen() {
         <Text style={styles.headerSub}>Evcil hayvan dünyasından güncel içerikler</Text>
       </MotiView>
 
-      {NEWS.map((item, i) => (
+      {news.map((item, i) => (
         <MotiView
-          key={item.id}
+          key={item.id || i}
           from={{ opacity: 0, translateY: 20 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'timing', delay: i * 110, duration: 500 }}
         >
           <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-            <View style={[styles.colorBar, { backgroundColor: item.color }]} />
+            <View style={[styles.colorBar, { backgroundColor: '#FF6B00' }]} />
             <View style={styles.cardContent}>
               <View style={styles.cardTop}>
-                <Text style={styles.cardEmoji}>{item.emoji}</Text>
-                <View style={[styles.categoryBadge, { backgroundColor: `${item.color}18` }]}>
-                  <Text style={[styles.categoryText, { color: item.color }]}>{item.category}</Text>
+                {item.image_url ? (
+                  <Image source={{ uri: item.image_url }} style={{ width: 24, height: 24, borderRadius: 12 }} />
+                ) : (
+                  <Text style={styles.cardEmoji}>📰</Text>
+                )}
+                <View style={[styles.categoryBadge, { backgroundColor: `#FF6B0018` }]}>
+                  <Text style={[styles.categoryText, { color: '#FF6B00' }]}>Haber</Text>
                 </View>
-                <Text style={styles.readTime}>⏱ {item.readTime}</Text>
+                <Text style={styles.readTime}>📅 {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Yeni'}</Text>
               </View>
               <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.excerpt} numberOfLines={2}>{item.excerpt}</Text>
+              <Text style={styles.excerpt} numberOfLines={2}>{item.content}</Text>
             </View>
           </Pressable>
         </MotiView>

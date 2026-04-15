@@ -1,21 +1,27 @@
 import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { MotiView } from 'moti';
-
-const THREADS = [
-  { id: '1', title: 'Kedim mama yemiyor, ne yapmalıyım?', author: 'Selin K.', replies: 14, category: 'Beslenme', emoji: '🍽️' },
-  { id: '2', title: 'İlk kez köpek alacağım, hangi ırk önerirsiniz?', author: 'Mert A.', replies: 32, category: 'Tavsiye', emoji: '🐶' },
-  { id: '3', title: 'Sokak kedisi evde ne zaman alışır?', author: 'Ayşe D.', replies: 8, category: 'Davranış', emoji: '🏠' },
-  { id: '4', title: 'Veteriner önerisi — Kadıköy bölgesi', author: 'Burak T.', replies: 21, category: 'Veteriner', emoji: '🏥' },
-];
+import { useState, useEffect } from 'react';
+import { supabase } from '../../../lib/supabase';
 
 const CATEGORY_COLORS: Record<string, string> = {
   Beslenme: '#34C759',
   Tavsiye: '#007AFF',
   Davranış: '#FF9500',
   Veteriner: '#FF3B30',
+  Genel: '#8E8E93',
 };
 
 export default function ForumScreen() {
+  const [threads, setThreads] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchThreads() {
+      const { data, error } = await supabase.from('forum_posts').select('*');
+      if (data) setThreads(data);
+    }
+    fetchThreads();
+  }, []);
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <MotiView
@@ -28,24 +34,24 @@ export default function ForumScreen() {
         <Text style={styles.headerSub}>Toplulukla bilgi paylaş</Text>
       </MotiView>
 
-      {THREADS.map((t, i) => (
+      {threads.map((t, i) => (
         <MotiView
-          key={t.id}
+          key={t.id || i}
           from={{ opacity: 0, translateY: 20 }}
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'timing', delay: i * 100, duration: 500 }}
         >
           <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
             <View style={styles.cardTop}>
-              <Text style={styles.threadEmoji}>{t.emoji}</Text>
-              <View style={[styles.categoryBadge, { backgroundColor: `${CATEGORY_COLORS[t.category]}20` }]}>
-                <Text style={[styles.categoryText, { color: CATEGORY_COLORS[t.category] }]}>{t.category}</Text>
+              <Text style={styles.threadEmoji}>💬</Text>
+              <View style={[styles.categoryBadge, { backgroundColor: `${CATEGORY_COLORS['Genel']}20` }]}>
+                <Text style={[styles.categoryText, { color: CATEGORY_COLORS['Genel'] }]}>Genel</Text>
               </View>
             </View>
             <Text style={styles.threadTitle}>{t.title}</Text>
             <View style={styles.cardBottom}>
-              <Text style={styles.author}>👤 {t.author}</Text>
-              <Text style={styles.replies}>💬 {t.replies} yanıt</Text>
+              <Text style={styles.author}>👤 Kullanıcı</Text>
+              <Text style={styles.replies}>📅 {t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Yakın zamanda'}</Text>
             </View>
           </Pressable>
         </MotiView>
