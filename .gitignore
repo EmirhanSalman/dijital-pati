@@ -34,3 +34,11 @@ Thumbs.db
 .eslintcache
 .turbo
 .cache
+# Expo specific
+.expo/
+web-build/
+
+# Smart Contracts / Hardhat
+artifacts/
+cache/
+typechain-types/

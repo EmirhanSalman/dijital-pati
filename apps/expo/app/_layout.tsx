@@ -38,14 +38,15 @@ function useAuthGate(isAuthenticated: boolean, isReady: boolean) {
     }
     // 2. Kullanıcı giriş yapmış ve (auth) grubundaysa -> Ana sayfaya yolla
     else if (isAuthenticated && inAuthGroup) {
-      router.replace('/(app)/(home)');
+      // DÜZELTME: Klasör adındaki parantezleri sildiğimiz için yol '/(app)/home' oldu
+      router.replace('/(app)/home');
     }
-  }, [segments, isAuthenticated, isReady]);
+  }, [segments, isAuthenticated, isReady, router]);
 }
 
 // ─── ROOT LAYOUT ────────────────────────────────────────────────
 export default function RootLayout() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [isReady, setIsReady] = useState(false);
 
   // Layout'un tam olarak mount edildiğinden emin olalım
