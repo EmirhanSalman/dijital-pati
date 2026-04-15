@@ -10,7 +10,7 @@
     "web": "npm run dev --workspace=apps/next",
     "mobile": "npm run start --workspace=apps/expo",
     "dev": "concurrently \"npm run web\" \"npm run mobile\"",
-    "postinstall": "patch-package"
+    "postinstall": "npx patch-package"
   },
   "devDependencies": {
     "@expo/config-plugins": "~54.0.0",
