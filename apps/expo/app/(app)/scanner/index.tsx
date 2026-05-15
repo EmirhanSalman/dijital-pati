@@ -111,9 +111,9 @@ export default function ScannerScreen() {
           {
             text: 'Tamam',
             onPress: () =>
-              router.replace({
+              router.push({
                 pathname: '/lost-pets/[id]',
-                params: { id: String(petDbId) },
+                params: { id: String(petDbId), from: 'scanner' },
               }),
           },
         ]);

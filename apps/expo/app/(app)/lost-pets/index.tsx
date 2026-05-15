@@ -76,7 +76,10 @@ export default function LostPetsScreen() {
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             onPress={() => {
               console.log('Navigating to pet detail:', pet.id);
-              router.push({ pathname: '/lost-pets/[id]', params: { id: pet.id } });
+              router.push({
+                pathname: '/lost-pets/[id]',
+                params: { id: String(pet.id), from: 'list' },
+              });
             }}
           >
             <View style={styles.cardLeft}>

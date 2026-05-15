@@ -3,12 +3,14 @@ import {
   Pressable, ActivityIndicator, Alert,
 } from 'react-native';
 import { MotiView } from 'moti';
-import { useState, useEffect } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { HeaderBackButton } from '@react-navigation/elements';
 import { Camera } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../_layout';
+import { useAuth } from '../../../lib/auth';
 import { pickImageUri, uploadImage, buildPetImagePath } from '../../../lib/storage';
+import { navigatePetDetailBack } from '../../../lib/navigation';
 
 const C = {
   primary:    '#6366F1',
@@ -32,18 +34,22 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   default:{ label: 'Kayıp', color: C.danger,  bg: C.dangerBg  },
 };
 
-function goBack(router: ReturnType<typeof useRouter>) {
-  if (router.canGoBack()) {
-    router.back();
-  } else {
-    router.replace('/lost-pets');
-  }
-}
-
 export default function PetDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const router = useRouter();
+
+  const handleBack = useCallback(
+    () => navigatePetDetailBack(router, from),
+    [router, from]
+  );
   const { session } = useAuth();
+
+  const headerBack = useCallback(
+    (props: { tintColor?: string }) => (
+      <HeaderBackButton {...props} onPress={handleBack} />
+    ),
+    [handleBack]
+  );
   const [pet, setPet] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -67,28 +73,41 @@ export default function PetDetailScreen() {
     fetchPet();
   }, [id]);
 
+  const stackOptions = {
+    title: 'Hayvan Detayı' as const,
+    headerBackTitle: 'Kayıplar' as const,
+    headerBackVisible: true,
+    headerLeft: headerBack,
+  };
+
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={C.primary} />
-        <Text style={styles.loadingText}>Yükleniyor...</Text>
-      </View>
+      <>
+        <Stack.Screen options={stackOptions} />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={C.primary} />
+          <Text style={styles.loadingText}>Yükleniyor...</Text>
+        </View>
+      </>
     );
   }
 
   if (error || !pet) {
     return (
-      <View style={styles.centered}>
+      <>
+        <Stack.Screen options={stackOptions} />
+        <View style={styles.centered}>
         <Text style={styles.errorEmoji}>🐾</Text>
         <Text style={styles.errorTitle}>Kayıt Bulunamadı</Text>
         <Text style={styles.errorSub}>{error || 'Bu hayvan mevcut değil.'}</Text>
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.8 }]}
-          onPress={() => goBack(router)}
+          onPress={handleBack}
         >
           <Text style={styles.backBtnText}>← Geri Dön</Text>
         </Pressable>
-      </View>
+        </View>
+      </>
     );
   }
 
@@ -127,7 +146,9 @@ export default function PetDetailScreen() {
   };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+    <>
+      <Stack.Screen options={stackOptions} />
+      <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       {/* Hero Image / Avatar */}
       <MotiView
         from={{ opacity: 0, scale: 0.95 }}
@@ -222,12 +243,13 @@ export default function PetDetailScreen() {
       >
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.85 }]}
-          onPress={() => goBack(router)}
+          onPress={handleBack}
         >
           <Text style={styles.backBtnText}>← Listeye Dön</Text>
         </Pressable>
       </MotiView>
     </ScrollView>
+    </>
   );
 }
 

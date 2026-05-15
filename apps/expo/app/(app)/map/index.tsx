@@ -13,10 +13,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, MapPin, Search } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
+import { navigateScreenBack } from '../../../lib/navigation';
 
 /**
  * Requires `latitude` and `longitude` on `pets` (see add_pets_map_coordinates.sql).
- * Pets without valid coordinates are skipped; the banner explains missing data.
+ * All pets with valid coordinates are shown (any status).
  */
 type PetRecord = {
   id: string | number;
@@ -45,6 +46,8 @@ type ScanMarker = PetScan & {
   latitude: number;
   longitude: number;
 };
+
+type LatLng = { latitude: number; longitude: number };
 
 function normalizeScan(raw: Record<string, unknown>): ScanMarker | null {
   const lat = Number(raw.latitude);
@@ -80,10 +83,10 @@ const BRAND = {
 const SEARCH_RADIUS_METERS = 500;
 
 const DEFAULT_REGION: Region = {
-  latitude: 41.0082,
-  longitude: 28.9784,
-  latitudeDelta: 0.12,
-  longitudeDelta: 0.12,
+  latitude: 37.76,
+  longitude: 30.55,
+  latitudeDelta: 0.35,
+  longitudeDelta: 0.35,
 };
 
 function getPetCoordinates(pet: PetRecord): { latitude: number; longitude: number } | null {
@@ -99,10 +102,36 @@ function getPetCoordinates(pet: PetRecord): { latitude: number; longitude: numbe
   return { latitude, longitude };
 }
 
+function fitMapToCoords(
+  mapRef: React.RefObject<MapView | null>,
+  coordinates: LatLng[],
+  edgePadding: { top: number; right: number; bottom: number; left: number },
+  animated: boolean
+) {
+  if (!mapRef.current || coordinates.length === 0) return;
+
+  if (coordinates.length === 1) {
+    const { latitude, longitude } = coordinates[0];
+    mapRef.current.animateToRegion(
+      {
+        latitude,
+        longitude,
+        latitudeDelta: 0.04,
+        longitudeDelta: 0.04,
+      },
+      animated ? 350 : 0
+    );
+    return;
+  }
+
+  mapRef.current.fitToCoordinates(coordinates, { edgePadding, animated });
+}
+
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
+  const hasInitialFit = useRef(false);
 
   const [pets, setPets] = useState<PetRecord[]>([]);
   const [scans, setScans] = useState<ScanMarker[]>([]);
@@ -110,11 +139,24 @@ export default function MapScreen() {
   const [selectedPetId, setSelectedPetId] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const mapEdgePadding = useMemo(
+    () => ({
+      top: insets.top + 128,
+      right: 52,
+      bottom: Math.max(insets.bottom, 24) + 56,
+      left: 52,
+    }),
+    [insets.top, insets.bottom]
+  );
+
   const fetchMapData = useCallback(async () => {
     setLoading(true);
     const [petsRes, scansRes] = await Promise.all([
       supabase.from('pets').select('*'),
-      supabase.from('pet_scans').select('id, pet_id, latitude, longitude, scanned_at').order('scanned_at', { ascending: true }),
+      supabase
+        .from('pet_scans')
+        .select('id, pet_id, latitude, longitude, scanned_at')
+        .order('scanned_at', { ascending: true }),
     ]);
     if (!petsRes.error && petsRes.data) setPets(petsRes.data as PetRecord[]);
     if (!scansRes.error && scansRes.data) {
@@ -125,6 +167,7 @@ export default function MapScreen() {
       );
     }
     setLoading(false);
+    hasInitialFit.current = false;
   }, []);
 
   useEffect(() => {
@@ -169,31 +212,47 @@ export default function MapScreen() {
     ];
   }, [selectedPet, selectedPetScans]);
 
+  const allVisibleCoordinates = useMemo<LatLng[]>(() => {
+    const petCoords = filteredMarkers.map(({ latitude, longitude }) => ({ latitude, longitude }));
+    const scanCoords = scans.map(({ latitude, longitude }) => ({ latitude, longitude }));
+    const merged = [...petCoords, ...scanCoords];
+    const seen = new Set<string>();
+    return merged.filter((c) => {
+      const key = `${c.latitude.toFixed(5)},${c.longitude.toFixed(5)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [filteredMarkers, scans]);
+
+  const selectionCoordinates = useMemo<LatLng[]>(() => {
+    if (!selectedPet) return [];
+    return [
+      { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
+      ...selectedPetScans.map(({ latitude, longitude }) => ({ latitude, longitude })),
+    ];
+  }, [selectedPet, selectedPetScans]);
+
   const handleMarkerPress = (petId: string | number) => {
     setSelectedPetId(petId);
   };
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (loading || selectedPetId != null) return;
 
-    const coords = selectedPet
-      ? [
-          { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
-          ...selectedPetScans.map(({ latitude, longitude }) => ({ latitude, longitude })),
-        ]
-      : filteredMarkers.map(({ latitude, longitude }) => ({ latitude, longitude }));
+    fitMapToCoords(mapRef, allVisibleCoordinates, mapEdgePadding, hasInitialFit.current);
+    if (allVisibleCoordinates.length > 0) {
+      hasInitialFit.current = true;
+    }
+  }, [loading, allVisibleCoordinates, mapEdgePadding, selectedPetId]);
 
-    if (coords.length === 0) return;
-
-    mapRef.current.fitToCoordinates(coords, {
-      edgePadding: { top: insets.top + 120, right: 40, bottom: 40, left: 40 },
-      animated: true,
-    });
-  }, [filteredMarkers, selectedPet, selectedPetScans, insets.top]);
+  useEffect(() => {
+    if (!selectedPet || selectionCoordinates.length === 0) return;
+    fitMapToCoords(mapRef, selectionCoordinates, mapEdgePadding, true);
+  }, [selectedPet, selectionCoordinates, mapEdgePadding]);
 
   const handleBack = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)/home');
+    navigateScreenBack(router, '/(app)/home');
   };
 
   return (
@@ -206,7 +265,7 @@ export default function MapScreen() {
         showsMyLocationButton={Platform.OS === 'android'}
       >
         {filteredMarkers.map((pet) => {
-          const isSelected = selectedPetId === pet.id;
+          const isSelected = samePetId(selectedPetId, pet.id);
           return (
             <Circle
               key={`circle-${pet.id}`}
@@ -233,10 +292,10 @@ export default function MapScreen() {
                 <View style={styles.callout}>
                   <Text style={styles.calloutTitle}>{pet.name || 'İsimsiz'}</Text>
                   <Text style={styles.calloutSub}>
+                    {pet.status ? `${pet.status} · ` : ''}
                     {isSelected
                       ? `${selectedPetScans.length} QR görülme`
                       : 'Dokun → yeşil pin izi'}
-                    {' · '}500 m alan
                   </Text>
                 </View>
               </Callout>
@@ -274,7 +333,6 @@ export default function MapScreen() {
         ))}
       </MapView>
 
-      {/* Top overlay: back + search */}
       <View style={[styles.overlay, { paddingTop: insets.top + 8 }]}>
         <View style={styles.topRow}>
           <Pressable
@@ -289,7 +347,7 @@ export default function MapScreen() {
             <Search color={BRAND.muted} size={18} strokeWidth={2} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Kayıp hayvan ara..."
+              placeholder="Hayvan ara..."
               placeholderTextColor={BRAND.muted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -304,7 +362,7 @@ export default function MapScreen() {
             <Text style={styles.legendText}>
               {loading
                 ? 'Yükleniyor...'
-                : `${filteredMarkers.length} kayıp · ${scans.length} tarama`}
+                : `${filteredMarkers.length} hayvan · ${scans.length} tarama`}
             </Text>
           </View>
           {selectedPetId != null && (
@@ -317,10 +375,10 @@ export default function MapScreen() {
 
         {!loading && petsMissingCoords > 0 && (
           <View style={styles.hintBanner}>
-            <Text style={styles.hintTitle}>Konumsuz ilanlar atlandı</Text>
+            <Text style={styles.hintTitle}>Konumsuz kayıtlar atlandı</Text>
             <Text style={styles.hintBody}>
-              {petsMissingCoords} kayıt için latitude/longitude yok. Supabase’de{' '}
-              add_pets_map_coordinates.sql migrasyonunu çalıştırın.
+              {petsMissingCoords} kayıt için geçerli koordinat yok. normalize_pets_null_coordinates.sql
+              migrasyonunu çalıştırabilirsiniz.
             </Text>
           </View>
         )}
@@ -329,7 +387,7 @@ export default function MapScreen() {
           <View style={styles.hintBanner}>
             <Text style={styles.hintTitle}>Haritada gösterilecek pin yok</Text>
             <Text style={styles.hintBody}>
-              Kayıp ilanlara son görülme koordinatı ekleyince kırmızı pinler burada görünür.
+              pets tablosuna latitude/longitude ekleyince tüm hayvanlar burada görünür.
             </Text>
           </View>
         )}
