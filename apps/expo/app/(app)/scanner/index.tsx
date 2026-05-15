@@ -89,12 +89,23 @@ export default function ScannerScreen() {
         });
 
         const { latitude, longitude } = position.coords;
-        const { error } = await supabase.from('pet_scans').insert({
-          pet_id: petDbId,
-          latitude,
-          longitude,
-          scanned_at: new Date().toISOString(),
-        });
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          Alert.alert('Konum hatası', 'GPS koordinatları alınamadı. Lütfen tekrar deneyin.');
+          return;
+        }
+
+        const scannedAt = new Date().toISOString();
+        const { data: inserted, error } = await supabase
+          .from('pet_scans')
+          .insert({
+            pet_id: petDbId,
+            latitude,
+            longitude,
+            scanned_at: scannedAt,
+          })
+          .select('id, pet_id, latitude, longitude, scanned_at')
+          .single();
 
         if (error) {
           console.error('pet_scans insert error:', error);
@@ -102,14 +113,24 @@ export default function ScannerScreen() {
             'Kayıt hatası',
             error.message.includes('pet_scans')
               ? 'pet_scans tablosu bulunamadı. create_pet_scans_table.sql migrasyonunu çalıştırın.'
-              : 'Konum kaydedilemedi. Lütfen tekrar deneyin.'
+              : `Konum kaydedilemedi: ${error.message}`
           );
           return;
         }
 
-        Alert.alert('Başarılı', 'Görülme konumu haritaya kaydedildi.', [
+        console.log('pet_scans inserted:', inserted);
+
+        Alert.alert('Başarılı', 'Görülme konumu kaydedildi. Haritada yeşil pin olarak görünecek.', [
           {
-            text: 'Tamam',
+            text: 'Haritada gör',
+            onPress: () =>
+              router.push({
+                pathname: '/(app)/map',
+                params: { selectPetId: String(petDbId) },
+              }),
+          },
+          {
+            text: 'Detay',
             onPress: () =>
               router.push({
                 pathname: '/lost-pets/[id]',

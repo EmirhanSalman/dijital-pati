@@ -10,28 +10,21 @@ import {
 } from 'react-native';
 import MapView, { Marker, Circle, Callout, Polyline, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, MapPin, Search } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
 import { navigateScreenBack } from '../../../lib/navigation';
+import {
+  buildMapPetMarkers,
+  samePetId,
+  ISPARTA_CENTER,
+  type MapPetMarker,
+  type PetLike,
+} from '../../../lib/map-coords';
 
-/**
- * Requires `latitude` and `longitude` on `pets` (see add_pets_map_coordinates.sql).
- * All pets with valid coordinates are shown (any status).
- */
-type PetRecord = {
-  id: string | number;
+type PetRecord = PetLike & {
   name?: string | null;
   status?: string | null;
-  latitude?: number | string | null;
-  longitude?: number | string | null;
-  last_seen_latitude?: number | string | null;
-  last_seen_longitude?: number | string | null;
-};
-
-type PetMarker = PetRecord & {
-  latitude: number;
-  longitude: number;
 };
 
 type PetScan = {
@@ -42,10 +35,7 @@ type PetScan = {
   scanned_at: string;
 };
 
-type ScanMarker = PetScan & {
-  latitude: number;
-  longitude: number;
-};
+type ScanMarker = PetScan;
 
 type LatLng = { latitude: number; longitude: number };
 
@@ -53,18 +43,18 @@ function normalizeScan(raw: Record<string, unknown>): ScanMarker | null {
   const lat = Number(raw.latitude);
   const lng = Number(raw.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (raw.id == null || raw.pet_id == null || !raw.scanned_at) return null;
+  if (raw.id == null || raw.pet_id == null) return null;
+
+  const scannedAt = raw.scanned_at ?? raw.created_at;
+  if (!scannedAt) return null;
+
   return {
     id: String(raw.id),
     pet_id: raw.pet_id as number | string,
     latitude: lat,
     longitude: lng,
-    scanned_at: String(raw.scanned_at),
+    scanned_at: String(scannedAt),
   };
-}
-
-function samePetId(a: string | number | null | undefined, b: string | number | null | undefined) {
-  return String(a ?? '') === String(b ?? '');
 }
 
 const BRAND = {
@@ -82,25 +72,16 @@ const BRAND = {
 
 const SEARCH_RADIUS_METERS = 500;
 
+/** Soft danger radius — low fill, subtle stroke */
+const CIRCLE_FILL = 'rgba(239, 68, 68, 0.08)';
+const CIRCLE_STROKE = 'rgba(220, 38, 38, 0.35)';
+
 const DEFAULT_REGION: Region = {
-  latitude: 37.76,
-  longitude: 30.55,
+  latitude: ISPARTA_CENTER.latitude,
+  longitude: ISPARTA_CENTER.longitude,
   latitudeDelta: 0.35,
   longitudeDelta: 0.35,
 };
-
-function getPetCoordinates(pet: PetRecord): { latitude: number; longitude: number } | null {
-  const lat = pet.latitude ?? pet.last_seen_latitude;
-  const lng = pet.longitude ?? pet.last_seen_longitude;
-  if (lat == null || lng == null) return null;
-
-  const latitude = Number(lat);
-  const longitude = Number(lng);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
-
-  return { latitude, longitude };
-}
 
 function fitMapToCoords(
   mapRef: React.RefObject<MapView | null>,
@@ -129,6 +110,7 @@ function fitMapToCoords(
 
 export default function MapScreen() {
   const router = useRouter();
+  const { selectPetId } = useLocalSearchParams<{ selectPetId?: string }>();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const hasInitialFit = useRef(false);
@@ -136,6 +118,7 @@ export default function MapScreen() {
   const [pets, setPets] = useState<PetRecord[]>([]);
   const [scans, setScans] = useState<ScanMarker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedPetId, setSelectedPetId] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -151,6 +134,8 @@ export default function MapScreen() {
 
   const fetchMapData = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
+
     const [petsRes, scansRes] = await Promise.all([
       supabase.from('pets').select('*'),
       supabase
@@ -158,31 +143,46 @@ export default function MapScreen() {
         .select('id, pet_id, latitude, longitude, scanned_at')
         .order('scanned_at', { ascending: true }),
     ]);
-    if (!petsRes.error && petsRes.data) setPets(petsRes.data as PetRecord[]);
-    if (!scansRes.error && scansRes.data) {
+
+    if (petsRes.error) {
+      console.error('pets fetch error:', petsRes.error);
+      setFetchError(petsRes.error.message);
+    } else if (petsRes.data) {
+      setPets(petsRes.data as PetRecord[]);
+    }
+
+    if (scansRes.error) {
+      console.error('pet_scans fetch error:', scansRes.error);
+      setFetchError((prev) => prev ?? scansRes.error!.message);
+      setScans([]);
+    } else if (scansRes.data) {
       setScans(
         scansRes.data
           .map((row) => normalizeScan(row as Record<string, unknown>))
           .filter((row): row is ScanMarker => row !== null)
       );
     }
+
     setLoading(false);
     hasInitialFit.current = false;
   }, []);
 
-  useEffect(() => {
-    fetchMapData();
-  }, [fetchMapData]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchMapData();
+    }, [fetchMapData])
+  );
 
-  const markers = useMemo<PetMarker[]>(() => {
-    return pets
-      .map((pet) => {
-        const coords = getPetCoordinates(pet);
-        if (!coords) return null;
-        return { ...pet, ...coords };
-      })
-      .filter((pet): pet is PetMarker => pet !== null);
-  }, [pets]);
+  useEffect(() => {
+    if (selectPetId) {
+      setSelectedPetId(selectPetId);
+    }
+  }, [selectPetId]);
+
+  const markers = useMemo<MapPetMarker<PetRecord>[]>(
+    () => buildMapPetMarkers(pets),
+    [pets]
+  );
 
   const filteredMarkers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -204,8 +204,11 @@ export default function MapScreen() {
       .sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
   }, [scans, selectedPetId]);
 
-  const trailCoordinates = useMemo(() => {
-    if (!selectedPet || selectedPetScans.length === 0) return [];
+  /** Virtual paw trail: red pin → scan₁ → scan₂ → … (chronological) */
+  const pawTrailCoordinates = useMemo<LatLng[]>(() => {
+    if (!selectedPet) return [];
+    if (selectedPetScans.length === 0) return [];
+
     return [
       { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
       ...selectedPetScans.map(({ latitude, longitude }) => ({ latitude, longitude })),
@@ -213,25 +216,24 @@ export default function MapScreen() {
   }, [selectedPet, selectedPetScans]);
 
   const allVisibleCoordinates = useMemo<LatLng[]>(() => {
-    const petCoords = filteredMarkers.map(({ latitude, longitude }) => ({ latitude, longitude }));
+    const petCoords = filteredMarkers.map(({ mapLatitude, mapLongitude }) => ({
+      latitude: mapLatitude,
+      longitude: mapLongitude,
+    }));
     const scanCoords = scans.map(({ latitude, longitude }) => ({ latitude, longitude }));
-    const merged = [...petCoords, ...scanCoords];
-    const seen = new Set<string>();
-    return merged.filter((c) => {
-      const key = `${c.latitude.toFixed(5)},${c.longitude.toFixed(5)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return [...petCoords, ...scanCoords];
   }, [filteredMarkers, scans]);
 
   const selectionCoordinates = useMemo<LatLng[]>(() => {
+    if (pawTrailCoordinates.length > 0) return pawTrailCoordinates;
     if (!selectedPet) return [];
     return [
-      { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
-      ...selectedPetScans.map(({ latitude, longitude }) => ({ latitude, longitude })),
+      {
+        latitude: selectedPet.mapLatitude,
+        longitude: selectedPet.mapLongitude,
+      },
     ];
-  }, [selectedPet, selectedPetScans]);
+  }, [pawTrailCoordinates, selectedPet]);
 
   const handleMarkerPress = (petId: string | number) => {
     setSelectedPetId(petId);
@@ -271,19 +273,24 @@ export default function MapScreen() {
               key={`circle-${pet.id}`}
               center={{ latitude: pet.latitude, longitude: pet.longitude }}
               radius={SEARCH_RADIUS_METERS}
-              fillColor="rgba(255, 0, 0, 0.2)"
-              strokeColor="rgba(239, 68, 68, 0.75)"
-              strokeWidth={2}
+              fillColor={CIRCLE_FILL}
+              strokeColor={CIRCLE_STROKE}
+              strokeWidth={1.5}
               zIndex={isSelected ? 2 : 1}
             />
           );
         })}
+
         {filteredMarkers.map((pet) => {
           const isSelected = samePetId(selectedPetId, pet.id);
+          const scanCount = isSelected
+            ? selectedPetScans.length
+            : scans.filter((s) => samePetId(s.pet_id, pet.id)).length;
+
           return (
             <Marker
               key={`marker-${pet.id}`}
-              coordinate={{ latitude: pet.latitude, longitude: pet.longitude }}
+              coordinate={{ latitude: pet.mapLatitude, longitude: pet.mapLongitude }}
               pinColor="red"
               zIndex={isSelected ? 3 : 2}
               onPress={() => handleMarkerPress(pet.id)}
@@ -294,8 +301,10 @@ export default function MapScreen() {
                   <Text style={styles.calloutSub}>
                     {pet.status ? `${pet.status} · ` : ''}
                     {isSelected
-                      ? `${selectedPetScans.length} QR görülme`
-                      : 'Dokun → yeşil pin izi'}
+                      ? `${scanCount} QR izi — pati rotası`
+                      : scanCount > 0
+                        ? `${scanCount} tarama · dokun`
+                        : 'Dokun → QR izi'}
                   </Text>
                 </View>
               </Callout>
@@ -303,13 +312,13 @@ export default function MapScreen() {
           );
         })}
 
-        {selectedPet && trailCoordinates.length > 1 && (
+        {selectedPet && pawTrailCoordinates.length > 1 && (
           <Polyline
             key={`trail-${selectedPet.id}`}
-            coordinates={trailCoordinates}
-            strokeColor="#22C55E"
+            coordinates={pawTrailCoordinates}
+            strokeColor="#16A34A"
             strokeWidth={3}
-            lineDashPattern={[10, 8]}
+            lineDashPattern={[12, 8]}
             zIndex={4}
           />
         )}
@@ -319,11 +328,11 @@ export default function MapScreen() {
             key={`scan-${scan.id}`}
             coordinate={{ latitude: scan.latitude, longitude: scan.longitude }}
             pinColor="green"
-            zIndex={5 + index}
+            zIndex={10 + index}
           >
             <Callout>
               <View style={styles.callout}>
-                <Text style={styles.calloutTitle}>QR görülme #{index + 1}</Text>
+                <Text style={styles.calloutTitle}>🐾 Görülme #{index + 1}</Text>
                 <Text style={styles.calloutSub}>
                   {new Date(scan.scanned_at).toLocaleString('tr-TR')}
                 </Text>
@@ -362,7 +371,7 @@ export default function MapScreen() {
             <Text style={styles.legendText}>
               {loading
                 ? 'Yükleniyor...'
-                : `${filteredMarkers.length} hayvan · ${scans.length} tarama`}
+                : `${filteredMarkers.length}/${pets.length} hayvan · ${scans.length} iz`}
             </Text>
           </View>
           {selectedPetId != null && (
@@ -373,12 +382,19 @@ export default function MapScreen() {
           )}
         </View>
 
+        {fetchError ? (
+          <View style={styles.hintBanner}>
+            <Text style={styles.hintTitle}>Veri yüklenemedi</Text>
+            <Text style={styles.hintBody}>{fetchError}</Text>
+          </View>
+        ) : null}
+
         {!loading && petsMissingCoords > 0 && (
           <View style={styles.hintBanner}>
             <Text style={styles.hintTitle}>Konumsuz kayıtlar atlandı</Text>
             <Text style={styles.hintBody}>
-              {petsMissingCoords} kayıt için geçerli koordinat yok. normalize_pets_null_coordinates.sql
-              migrasyonunu çalıştırabilirsiniz.
+              {petsMissingCoords} hayvanın koordinatı yok. spread_pets_isparta_coordinates.sql
+              migrasyonunu çalıştırın.
             </Text>
           </View>
         )}
@@ -387,7 +403,7 @@ export default function MapScreen() {
           <View style={styles.hintBanner}>
             <Text style={styles.hintTitle}>Haritada gösterilecek pin yok</Text>
             <Text style={styles.hintBody}>
-              pets tablosuna latitude/longitude ekleyince tüm hayvanlar burada görünür.
+              pets tablosuna geçerli latitude/longitude ekleyin veya migrasyonu çalıştırın.
             </Text>
           </View>
         )}
