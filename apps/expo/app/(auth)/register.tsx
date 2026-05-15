@@ -1,12 +1,12 @@
 import {
   View, Text, TextInput, Pressable,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ScrollView, ActivityIndicator, Alert,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import { MotiView } from 'moti';
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { supabase as sb } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 // ─── Brand Palette (web-synced) ──────────────────────────────────
 const C = {
@@ -21,42 +21,84 @@ const C = {
   background:  '#F8FAFC',
   danger:      '#EF4444',
   dangerBg:    '#FEF2F2',
+  success:     '#22C55E',
+  successBg:   '#F0FDF4',
 };
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
   const router = useRouter();
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [email, setEmail]           = useState('');
+  const [password, setPassword]     = useState('');
+  const [confirmPw, setConfirmPw]   = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [success, setSuccess]       = useState(false);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password) {
-      setError('Lütfen e-posta ve şifrenizi girin.');
-      return;
-    }
+  const validate = (): string | null => {
+    if (!email.trim())    return 'E-posta adresi boş bırakılamaz.';
+    if (!email.includes('@')) return 'Geçerli bir e-posta adresi girin.';
+    if (password.length < 6) return 'Şifre en az 6 karakter olmalıdır.';
+    if (password !== confirmPw) return 'Şifreler eşleşmiyor. Lütfen kontrol edin.';
+    return null;
+  };
+
+  const handleRegister = async () => {
+    const validationError = validate();
+    if (validationError) { setError(validationError); return; }
+
     setError(null);
     setLoading(true);
     try {
-      const { error: authError } = await sb.auth.signInWithPassword({
+      const { error: authError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
       });
+
       if (authError) {
-        // Map common Supabase error messages to Turkish
-        if (authError.message.includes('Invalid login credentials')) {
-          setError('E-posta veya şifre hatalı. Lütfen tekrar deneyin.');
-        } else if (authError.message.includes('Email not confirmed')) {
-          setError('E-posta adresinizi onaylayın. Gelen kutunuzu kontrol edin.');
+        if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
+          setError('Bu e-posta adresi zaten kayıtlı. Giriş yapmayı deneyin.');
+        } else if (authError.message.includes('Password should be')) {
+          setError('Şifre en az 6 karakter olmalıdır.');
         } else {
           setError(authError.message);
         }
+        return;
       }
-      // On success: onAuthStateChange in _layout.tsx auto-navigates to /(app)/home
+
+      // Supabase may require email confirmation (depends on project settings).
+      // Show a success message either way — onAuthStateChange handles auto-login.
+      setSuccess(true);
     } finally {
       setLoading(false);
     }
   };
+
+  if (success) {
+    return (
+      <View style={styles.successContainer}>
+        <MotiView
+          from={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', damping: 14 }}
+          style={styles.successCard}
+        >
+          <Text style={styles.successIcon}>✅</Text>
+          <Text style={styles.successTitle}>Kayıt Başarılı!</Text>
+          <Text style={styles.successBody}>
+            Hesabınız oluşturuldu. E-posta onayı gerekmiyorsa uygulama sizi otomatik yönlendirecek.{'\n\n'}
+            Gelen kutunuzu kontrol edin ve hesabınızı doğrulayın.
+          </Text>
+          <Pressable
+            id="go-to-login-after-register"
+            style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+            onPress={() => router.replace('/(auth)')}
+          >
+            <Text style={styles.primaryBtnText}>Giriş Ekranına Dön</Text>
+          </Pressable>
+        </MotiView>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -68,7 +110,7 @@ export default function LoginScreen() {
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Logo / Header */}
+        {/* Header */}
         <MotiView
           from={{ opacity: 0, translateY: -30 }}
           animate={{ opacity: 1, translateY: 0 }}
@@ -81,7 +123,7 @@ export default function LoginScreen() {
           <Text style={styles.appName}>
             Dijital<Text style={styles.appNameAccent}>Pati</Text>
           </Text>
-          <Text style={styles.tagline}>Hesabınıza giriş yapın</Text>
+          <Text style={styles.tagline}>Yeni hesap oluşturun</Text>
         </MotiView>
 
         {/* Form Card */}
@@ -105,7 +147,7 @@ export default function LoginScreen() {
           {/* Email */}
           <Text style={styles.label}>E-posta Adresi</Text>
           <TextInput
-            id="login-email"
+            id="register-email"
             style={styles.input}
             placeholder="ornek@email.com"
             placeholderTextColor={C.muted}
@@ -121,33 +163,53 @@ export default function LoginScreen() {
           {/* Password */}
           <Text style={styles.label}>Şifre</Text>
           <TextInput
-            id="login-password"
+            id="register-password"
             style={styles.input}
-            placeholder="Şifrenizi girin"
+            placeholder="En az 6 karakter"
             placeholderTextColor={C.muted}
             value={password}
             onChangeText={(t) => { setPassword(t); setError(null); }}
             secureTextEntry={true}
-            autoComplete="password"
-            returnKeyType="done"
-            onSubmitEditing={handleLogin}
+            autoComplete="password-new"
+            returnKeyType="next"
           />
+
+          {/* Confirm Password */}
+          <Text style={styles.label}>Şifre Tekrar</Text>
+          <TextInput
+            id="register-confirm-password"
+            style={[
+              styles.input,
+              confirmPw.length > 0 && password !== confirmPw && styles.inputError,
+            ]}
+            placeholder="Şifrenizi tekrar girin"
+            placeholderTextColor={C.muted}
+            value={confirmPw}
+            onChangeText={(t) => { setConfirmPw(t); setError(null); }}
+            secureTextEntry={true}
+            autoComplete="password-new"
+            returnKeyType="done"
+            onSubmitEditing={handleRegister}
+          />
+          {confirmPw.length > 0 && password !== confirmPw && (
+            <Text style={styles.inlineError}>Şifreler eşleşmiyor</Text>
+          )}
 
           {/* Submit */}
           <Pressable
-            id="login-submit"
+            id="register-submit"
             style={({ pressed }) => [
               styles.primaryBtn,
               pressed && styles.primaryBtnPressed,
               loading && styles.primaryBtnDisabled,
             ]}
-            onPress={handleLogin}
+            onPress={handleRegister}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryBtnText}>Giriş Yap</Text>
+              <Text style={styles.primaryBtnText}>Hesap Oluştur</Text>
             )}
           </Pressable>
 
@@ -158,13 +220,15 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Register Link */}
+          {/* Login Link */}
           <Pressable
-            id="go-to-register"
+            id="go-to-login"
             style={({ pressed }) => [styles.secondaryBtn, pressed && styles.secondaryBtnPressed]}
-            onPress={() => router.push('/(auth)/register')}
+            onPress={() => router.replace('/(auth)')}
           >
-            <Text style={styles.secondaryBtnText}>Hesabınız yok mu? <Text style={styles.secondaryBtnAccent}>Kayıt Ol</Text></Text>
+            <Text style={styles.secondaryBtnText}>
+              Zaten hesabınız var mı? <Text style={styles.secondaryBtnAccent}>Giriş Yap</Text>
+            </Text>
           </Pressable>
         </MotiView>
       </ScrollView>
@@ -224,6 +288,7 @@ const styles = StyleSheet.create({
     borderColor: '#FECACA',
   },
   errorText: { fontSize: 13, color: C.danger, lineHeight: 18 },
+  inlineError: { fontSize: 12, color: C.danger, marginTop: 4, marginLeft: 4 },
 
   // ── Inputs ──
   label: {
@@ -242,6 +307,10 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     fontSize: 15,
     color: C.foreground,
+  },
+  inputError: {
+    borderColor: C.danger,
+    backgroundColor: C.dangerBg,
   },
 
   // ── Buttons ──
@@ -280,4 +349,35 @@ const styles = StyleSheet.create({
   secondaryBtnPressed: { backgroundColor: C.primaryBg },
   secondaryBtnText: { fontSize: 14, color: C.muted, fontWeight: '500' },
   secondaryBtnAccent: { color: C.primary, fontWeight: '700' },
+
+  // ── Success State ──
+  successContainer: {
+    flex: 1,
+    backgroundColor: C.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  successCard: {
+    backgroundColor: C.surface,
+    borderRadius: 20,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    shadowColor: C.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  successIcon: { fontSize: 56, marginBottom: 16 },
+  successTitle: { fontSize: 22, fontWeight: '800', color: C.navy, marginBottom: 12 },
+  successBody: {
+    fontSize: 14,
+    color: C.muted,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 28,
+  },
 });
