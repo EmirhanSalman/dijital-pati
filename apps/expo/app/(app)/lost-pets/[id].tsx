@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Camera } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
-import { useAuth } from '../../../_layout';
+import { useAuth } from '../../_layout';
 import { pickImageUri, uploadImage, buildPetImagePath } from '../../../lib/storage';
 
 const C = {
