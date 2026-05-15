@@ -18,8 +18,12 @@ import {
   buildMapPetMarkers,
   samePetId,
   ISPARTA_CENTER,
+  filterValidLatLng,
+  dedupeConsecutiveCoords,
+  isValidLatLng,
   type MapPetMarker,
   type PetLike,
+  type LatLng,
 } from '../../../lib/map-coords';
 import { coordinatesFitKey, logMap } from '../../../lib/map-debug';
 
@@ -28,35 +32,13 @@ type PetRecord = PetLike & {
   status?: string | null;
 };
 
-type PetScan = {
+type ScanMarker = {
   id: string;
   pet_id: number | string;
   latitude: number;
   longitude: number;
   scanned_at: string;
 };
-
-type ScanMarker = PetScan;
-
-type LatLng = { latitude: number; longitude: number };
-
-function normalizeScan(raw: Record<string, unknown>): ScanMarker | null {
-  const lat = Number(raw.latitude);
-  const lng = Number(raw.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  if (raw.id == null || raw.pet_id == null) return null;
-
-  const scannedAt = raw.scanned_at ?? raw.created_at;
-  if (!scannedAt) return null;
-
-  return {
-    id: String(raw.id),
-    pet_id: raw.pet_id as number | string,
-    latitude: lat,
-    longitude: lng,
-    scanned_at: String(scannedAt),
-  };
-}
 
 const BRAND = {
   primary:    '#6366F1',
@@ -83,29 +65,64 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 0.35,
 };
 
-function fitMapToCoords(
+/** Minimum region span when fitting a single point (avoids extreme zoom). */
+const MIN_REGION_DELTA = 0.06;
+
+function normalizeScan(raw: Record<string, unknown>): ScanMarker | null {
+  const lat = Number(raw.latitude);
+  const lng = Number(raw.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (raw.id == null || raw.pet_id == null) return null;
+
+  const scannedAt = raw.scanned_at ?? raw.created_at;
+  if (!scannedAt) return null;
+
+  const coord = { latitude: lat, longitude: lng };
+  if (!isValidLatLng(coord)) return null;
+
+  return {
+    id: String(raw.id),
+    pet_id: raw.pet_id as number | string,
+    latitude: lat,
+    longitude: lng,
+    scanned_at: String(scannedAt),
+  };
+}
+
+function safeFitMapToCoords(
   mapRef: React.RefObject<MapView | null>,
   coordinates: LatLng[],
   edgePadding: { top: number; right: number; bottom: number; left: number },
-  animated: boolean
+  animated: boolean,
+  reason: string
 ) {
-  if (!mapRef.current || coordinates.length === 0) return;
-
-  if (coordinates.length === 1) {
-    const { latitude, longitude } = coordinates[0];
-    mapRef.current.animateToRegion(
-      {
-        latitude,
-        longitude,
-        latitudeDelta: 0.04,
-        longitudeDelta: 0.04,
-      },
-      animated ? 350 : 0
-    );
+  const valid = filterValidLatLng(coordinates);
+  if (!mapRef.current || valid.length === 0) {
+    logMap(`fit skipped (${reason}): no valid coordinates`, { input: coordinates.length });
     return;
   }
 
-  mapRef.current.fitToCoordinates(coordinates, { edgePadding, animated });
+  try {
+    if (valid.length === 1) {
+      const { latitude, longitude } = valid[0];
+      mapRef.current.animateToRegion(
+        {
+          latitude,
+          longitude,
+          latitudeDelta: MIN_REGION_DELTA,
+          longitudeDelta: MIN_REGION_DELTA,
+        },
+        animated ? 350 : 0
+      );
+      logMap(`fit region (${reason})`, { pointCount: 1 });
+      return;
+    }
+
+    mapRef.current.fitToCoordinates(valid, { edgePadding, animated });
+    logMap(`fitToCoordinates (${reason})`, { pointCount: valid.length });
+  } catch (err) {
+    logMap(`fit error (${reason})`, err);
+  }
 }
 
 export default function MapScreen() {
@@ -114,7 +131,6 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const lastInitialFitKey = useRef('');
-  const lastSelectionFitKey = useRef('');
 
   const [pets, setPets] = useState<PetRecord[]>([]);
   const [scans, setScans] = useState<ScanMarker[]>([]);
@@ -162,8 +178,11 @@ export default function MapScreen() {
       const normalized = scansRes.data
         .map((row) => normalizeScan(row as Record<string, unknown>))
         .filter((row): row is ScanMarker => row !== null);
+      const skipped = scansRes.data.length - normalized.length;
       setScans(normalized);
-      logMap(`pet_scans fetched: ${scansRes.data.length} raw, ${normalized.length} valid`);
+      logMap(`pet_scans fetched: ${scansRes.data.length} raw, ${normalized.length} valid`, {
+        skippedInvalid: skipped,
+      });
     }
 
     setLoading(false);
@@ -179,7 +198,6 @@ export default function MapScreen() {
 
   useEffect(() => {
     if (selectPetId) {
-      logMap('selectPetId param', selectPetId);
       setSelectedPetId(selectPetId);
     }
   }, [selectPetId]);
@@ -209,22 +227,19 @@ export default function MapScreen() {
       .sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
   }, [scans, selectedPetId]);
 
-  useEffect(() => {
-    if (selectedPetId == null) return;
-    logMap('selectedPetScans', {
-      selectedPetId,
-      matchedCount: selectedPetScans.length,
-      totalScans: scans.length,
-    });
-  }, [selectedPetId, selectedPetScans.length, scans.length]);
+  /** Paw trail: canonical pet position → scans (chronological), validated & deduped */
+  const pawTrailCoordinates = useMemo(() => {
+    if (!selectedPet) return [];
 
-  const pawTrailCoordinates = useMemo<LatLng[]>(() => {
-    if (!selectedPet || selectedPetScans.length === 0) return [];
-    return [
+    const raw: LatLng[] = [
       { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
-      ...selectedPetScans.map(({ latitude, longitude }) => ({ latitude, longitude })),
+      ...selectedPetScans.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
     ];
+
+    return dedupeConsecutiveCoords(raw);
   }, [selectedPet, selectedPetScans]);
+
+  const showPawTrail = pawTrailCoordinates.length >= 2;
 
   const allVisibleCoordinates = useMemo<LatLng[]>(() => {
     const petCoords = filteredMarkers.map(({ mapLatitude, mapLongitude }) => ({
@@ -232,7 +247,7 @@ export default function MapScreen() {
       longitude: mapLongitude,
     }));
     const scanCoords = scans.map(({ latitude, longitude }) => ({ latitude, longitude }));
-    return [...petCoords, ...scanCoords];
+    return filterValidLatLng([...petCoords, ...scanCoords]);
   }, [filteredMarkers, scans]);
 
   const initialFitKey = useMemo(
@@ -240,51 +255,67 @@ export default function MapScreen() {
     [allVisibleCoordinates]
   );
 
-  const selectionCoordinates = useMemo<LatLng[]>(() => {
-    if (pawTrailCoordinates.length > 0) return pawTrailCoordinates;
-    if (!selectedPet) return [];
-    return [
-      { latitude: selectedPet.mapLatitude, longitude: selectedPet.mapLongitude },
-    ];
-  }, [pawTrailCoordinates, selectedPet]);
-
-  const selectionFitKey = useMemo(
-    () => coordinatesFitKey(selectionCoordinates),
-    [selectionCoordinates]
-  );
-
-  const handleMarkerPress = (petId: string | number) => {
-    logMap('marker pressed', petId);
-    setSelectedPetId(petId);
-  };
-
   useEffect(() => {
-    if (loading || selectedPetId != null) return;
+    logMap('map state', {
+      visiblePets: filteredMarkers.length,
+      totalPets: pets.length,
+      skippedInvalidCoords: petsMissingCoords,
+      selectedPetId,
+      selectedPetName: selectedPet?.name ?? null,
+      selectedCoord: selectedPet
+        ? {
+            latitude: selectedPet.latitude,
+            longitude: selectedPet.longitude,
+            source: selectedPet.coordSource,
+            usedFallback: selectedPet.coordSource === 'location_fallback',
+          }
+        : null,
+      selectedScanCount: selectedPetScans.length,
+      pawTrailPoints: pawTrailCoordinates.length,
+    });
+  }, [
+    filteredMarkers.length,
+    pets.length,
+    petsMissingCoords,
+    selectedPetId,
+    selectedPet,
+    selectedPetScans.length,
+    pawTrailCoordinates.length,
+  ]);
+
+  /** Initial load only — do NOT re-fit on marker selection (keeps all red pins visible). */
+  useEffect(() => {
+    if (loading) return;
     if (!initialFitKey || initialFitKey === lastInitialFitKey.current) return;
 
-    logMap('fitToCoordinates: initial viewport', { pointCount: allVisibleCoordinates.length });
-    fitMapToCoords(mapRef, allVisibleCoordinates, mapEdgePadding, lastInitialFitKey.current !== '');
+    safeFitMapToCoords(
+      mapRef,
+      allVisibleCoordinates,
+      mapEdgePadding,
+      lastInitialFitKey.current !== '',
+      'initial-load'
+    );
     lastInitialFitKey.current = initialFitKey;
-  }, [loading, initialFitKey, allVisibleCoordinates, mapEdgePadding, selectedPetId]);
+  }, [loading, initialFitKey, allVisibleCoordinates, mapEdgePadding]);
 
-  useEffect(() => {
-    if (!selectedPet || !selectionFitKey) return;
-    if (selectionFitKey === lastSelectionFitKey.current) return;
-
-    logMap('fitToCoordinates: selection viewport', {
-      petId: selectedPet.id,
-      scanCount: selectedPetScans.length,
-    });
-    fitMapToCoords(mapRef, selectionCoordinates, mapEdgePadding, true);
-    lastSelectionFitKey.current = selectionFitKey;
-  }, [selectedPet, selectionFitKey, selectionCoordinates, selectedPetScans.length, mapEdgePadding]);
-
-  useEffect(() => {
-    if (!selectPetId || loading || !selectedPet) return;
-    if (!selectionFitKey || selectionFitKey === lastSelectionFitKey.current) return;
-    fitMapToCoords(mapRef, selectionCoordinates, mapEdgePadding, true);
-    lastSelectionFitKey.current = selectionFitKey;
-  }, [selectPetId, loading, selectedPet, selectionFitKey, selectionCoordinates, mapEdgePadding]);
+  const handleMarkerPress = useCallback(
+    (petId: string | number) => {
+      try {
+        const pet = filteredMarkers.find((p) => samePetId(p.id, petId));
+        logMap('marker pressed', {
+          petId,
+          name: pet?.name,
+          canonical: pet
+            ? { latitude: pet.latitude, longitude: pet.longitude, source: pet.coordSource }
+            : null,
+        });
+        setSelectedPetId(petId);
+      } catch (err) {
+        logMap('marker press error', err);
+      }
+    },
+    [filteredMarkers]
+  );
 
   const handleBack = () => {
     navigateScreenBack(router, '/(app)/home');
@@ -299,8 +330,20 @@ export default function MapScreen() {
         showsUserLocation
         showsMyLocationButton={Platform.OS === 'android'}
       >
+        {/* All red pets — never filtered by selection; MapView children must not be wrapped in View */}
         {filteredMarkers.map((pet) => {
+          if (!isValidLatLng({ latitude: pet.latitude, longitude: pet.longitude })) {
+            return null;
+          }
+          if (!isValidLatLng({ latitude: pet.mapLatitude, longitude: pet.mapLongitude })) {
+            return null;
+          }
+
           const isSelected = samePetId(selectedPetId, pet.id);
+          const scanCount = isSelected
+            ? selectedPetScans.length
+            : scans.filter((s) => samePetId(s.pet_id, pet.id)).length;
+
           return (
             <Circle
               key={`circle-${pet.id}`}
@@ -313,8 +356,11 @@ export default function MapScreen() {
             />
           );
         })}
-
         {filteredMarkers.map((pet) => {
+          if (!isValidLatLng({ latitude: pet.mapLatitude, longitude: pet.mapLongitude })) {
+            return null;
+          }
+
           const isSelected = samePetId(selectedPetId, pet.id);
           const scanCount = isSelected
             ? selectedPetScans.length
@@ -325,7 +371,7 @@ export default function MapScreen() {
               key={`marker-${pet.id}`}
               coordinate={{ latitude: pet.mapLatitude, longitude: pet.mapLongitude }}
               pinColor="red"
-              zIndex={isSelected ? 3 : 2}
+              zIndex={isSelected ? 4 : 3}
               onPress={() => handleMarkerPress(pet.id)}
             >
               <Callout onPress={() => handleMarkerPress(pet.id)}>
@@ -345,34 +391,39 @@ export default function MapScreen() {
           );
         })}
 
-        {selectedPet && pawTrailCoordinates.length > 1 && (
+        {showPawTrail && selectedPet ? (
           <Polyline
-            key={`trail-${selectedPet.id}`}
+            key={`trail-${selectedPet.id}-${pawTrailCoordinates.length}`}
             coordinates={pawTrailCoordinates}
             strokeColor="#16A34A"
             strokeWidth={3}
             lineDashPattern={[12, 8]}
-            zIndex={4}
+            zIndex={5}
           />
-        )}
+        ) : null}
 
-        {selectedPetScans.map((scan, index) => (
-          <Marker
-            key={`scan-${scan.id}`}
-            coordinate={{ latitude: scan.latitude, longitude: scan.longitude }}
-            pinColor="green"
-            zIndex={10 + index}
-          >
-            <Callout>
-              <View style={styles.callout}>
-                <Text style={styles.calloutTitle}>🐾 Görülme #{index + 1}</Text>
-                <Text style={styles.calloutSub}>
-                  {new Date(scan.scanned_at).toLocaleString('tr-TR')}
-                </Text>
-              </View>
-            </Callout>
-          </Marker>
-        ))}
+        {selectedPetScans.map((scan, index) => {
+          const coord = { latitude: scan.latitude, longitude: scan.longitude };
+          if (!isValidLatLng(coord)) return null;
+
+          return (
+            <Marker
+              key={`scan-${scan.id}`}
+              coordinate={coord}
+              pinColor="green"
+              zIndex={10 + index}
+            >
+              <Callout>
+                <View style={styles.callout}>
+                  <Text style={styles.calloutTitle}>🐾 Görülme #{index + 1}</Text>
+                  <Text style={styles.calloutSub}>
+                    {new Date(scan.scanned_at).toLocaleString('tr-TR')}
+                  </Text>
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
       </MapView>
 
       <View style={[styles.overlay, { paddingTop: insets.top + 8 }]}>
@@ -426,8 +477,7 @@ export default function MapScreen() {
           <View style={styles.hintBanner}>
             <Text style={styles.hintTitle}>Konumsuz kayıtlar atlandı</Text>
             <Text style={styles.hintBody}>
-              {petsMissingCoords} hayvanın koordinatı yok. spread_pets_isparta_coordinates.sql
-              migrasyonunu çalıştırın.
+              {petsMissingCoords} hayvan için geçerli latitude/longitude veya location_lat/lng yok.
             </Text>
           </View>
         )}
@@ -436,7 +486,7 @@ export default function MapScreen() {
           <View style={styles.hintBanner}>
             <Text style={styles.hintTitle}>Haritada gösterilecek pin yok</Text>
             <Text style={styles.hintBody}>
-              pets tablosuna geçerli latitude/longitude ekleyin veya migrasyonu çalıştırın.
+              pets tablosuna geçerli koordinat ekleyin veya migrasyonu çalıştırın.
             </Text>
           </View>
         )}
