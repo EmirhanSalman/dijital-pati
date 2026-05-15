@@ -75,8 +75,8 @@ export default function LostPetsScreen() {
           <Pressable
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             onPress={() => {
-              console.log('Pet card pressed:', pet.id, pet.name);
-              Alert.alert('Hayvan Detayı', `${pet.name} detay sayfasına gidiliyor...`);
+              console.log('Navigating to pet detail:', pet.id);
+              router.push({ pathname: '/lost-pets/[id]', params: { id: pet.id } });
             }}
           >
             <View style={styles.cardLeft}>
