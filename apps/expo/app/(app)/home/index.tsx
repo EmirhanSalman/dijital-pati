@@ -27,6 +27,7 @@ const CARDS = [
 
 const QUICK_ACTIONS = [
   { emoji: '🔍', label: 'Kayıp İlanları', description: 'Kayıp & bulunan hayvanlar', route: '/(app)/lost-pets', color: BRAND.primary },
+  { emoji: '📷', label: 'QR Okut',        description: 'Künye tara, konum kaydet',   route: '/(app)/scanner', color: BRAND.success },
   { emoji: '🗺️', label: 'Harita',         description: 'Kayıp ilanlar ve arama alanı', route: '/(app)/map',     color: BRAND.danger  },
   { emoji: '💬', label: 'Pati Forum',     description: 'Toplulukla bilgi paylaş',   route: '/(app)/forum',     color: BRAND.info    },
   { emoji: '📰', label: 'Haberler',       description: 'Güncel ipuçları & haberler', route: '/(app)/news',     color: BRAND.success  },

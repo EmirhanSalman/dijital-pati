@@ -110,6 +110,7 @@ export default function AppLayout() {
       />
       {/* Hidden screens — not shown in tab bar */}
       <Tabs.Screen name="map/index" options={{ href: null, title: 'Harita', headerShown: false }} />
+      <Tabs.Screen name="scanner/index" options={{ href: null, title: 'QR Okut', headerShown: false }} />
       <Tabs.Screen name="settings/index" options={{ href: null, title: 'Ayarlar' }} />
       <Tabs.Screen name="notifications" options={{ href: null, title: 'Bildirimler' }} />
     </Tabs>

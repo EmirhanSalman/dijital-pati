@@ -14,13 +14,15 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Dijital Pati, kayıp hayvan haritasında konumunuzu göstermek için konum erişimi kullanır."
+        "NSLocationWhenInUseUsageDescription": "Dijital Pati, kayıp hayvan haritasında konumunuzu göstermek için konum erişimi kullanır.",
+        "NSCameraUsageDescription": "Dijital Pati, evcil hayvan künyesindeki QR kodu okutmak için kameraya erişir."
       }
     },
     "android": {
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -42,6 +44,12 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Dijital Pati, kayıp hayvan haritasında konumunuzu göstermek için konum erişimi kullanır."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Dijital Pati, evcil hayvan künyesindeki QR kodu okutmak için kameraya erişir."
         }
       ]
     ]

@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import MapView, { Marker, Circle, Callout, Region } from 'react-native-maps';
+import MapView, { Marker, Circle, Callout, Polyline, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, MapPin, Search } from 'lucide-react-native';
@@ -33,6 +33,37 @@ type PetMarker = PetRecord & {
   longitude: number;
 };
 
+type PetScan = {
+  id: string;
+  pet_id: number | string;
+  latitude: number;
+  longitude: number;
+  scanned_at: string;
+};
+
+type ScanMarker = PetScan & {
+  latitude: number;
+  longitude: number;
+};
+
+function normalizeScan(raw: Record<string, unknown>): ScanMarker | null {
+  const lat = Number(raw.latitude);
+  const lng = Number(raw.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (raw.id == null || raw.pet_id == null || !raw.scanned_at) return null;
+  return {
+    id: String(raw.id),
+    pet_id: raw.pet_id as number | string,
+    latitude: lat,
+    longitude: lng,
+    scanned_at: String(raw.scanned_at),
+  };
+}
+
+function samePetId(a: string | number | null | undefined, b: string | number | null | undefined) {
+  return String(a ?? '') === String(b ?? '');
+}
+
 const BRAND = {
   primary:    '#6366F1',
   primaryBg:  '#EEF2FF',
@@ -43,6 +74,7 @@ const BRAND = {
   muted:      '#64748B',
   border:     '#E2E8F0',
   danger:     '#EF4444',
+  success:    '#22C55E',
 };
 
 const SEARCH_RADIUS_METERS = 500;
@@ -73,20 +105,31 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
 
   const [pets, setPets] = useState<PetRecord[]>([]);
+  const [scans, setScans] = useState<ScanMarker[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPetId, setSelectedPetId] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchPets = useCallback(async () => {
+  const fetchMapData = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('pets').select('*');
-    if (!error && data) setPets(data as PetRecord[]);
+    const [petsRes, scansRes] = await Promise.all([
+      supabase.from('pets').select('*'),
+      supabase.from('pet_scans').select('id, pet_id, latitude, longitude, scanned_at').order('scanned_at', { ascending: true }),
+    ]);
+    if (!petsRes.error && petsRes.data) setPets(petsRes.data as PetRecord[]);
+    if (!scansRes.error && scansRes.data) {
+      setScans(
+        scansRes.data
+          .map((row) => normalizeScan(row as Record<string, unknown>))
+          .filter((row): row is ScanMarker => row !== null)
+      );
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchPets();
-  }, [fetchPets]);
+    fetchMapData();
+  }, [fetchMapData]);
 
   const markers = useMemo<PetMarker[]>(() => {
     return pets
@@ -106,17 +149,47 @@ export default function MapScreen() {
 
   const petsMissingCoords = pets.length - markers.length;
 
-  useEffect(() => {
-    if (!mapRef.current || filteredMarkers.length === 0) return;
+  const selectedPet = useMemo(
+    () => filteredMarkers.find((pet) => samePetId(pet.id, selectedPetId)) ?? null,
+    [filteredMarkers, selectedPetId]
+  );
 
-    mapRef.current.fitToCoordinates(
-      filteredMarkers.map(({ latitude, longitude }) => ({ latitude, longitude })),
-      {
-        edgePadding: { top: insets.top + 120, right: 40, bottom: 40, left: 40 },
-        animated: true,
-      }
-    );
-  }, [filteredMarkers, insets.top]);
+  const selectedPetScans = useMemo(() => {
+    if (selectedPetId == null) return [];
+    return scans
+      .filter((scan) => samePetId(scan.pet_id, selectedPetId))
+      .sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
+  }, [scans, selectedPetId]);
+
+  const trailCoordinates = useMemo(() => {
+    if (!selectedPet || selectedPetScans.length === 0) return [];
+    return [
+      { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
+      ...selectedPetScans.map(({ latitude, longitude }) => ({ latitude, longitude })),
+    ];
+  }, [selectedPet, selectedPetScans]);
+
+  const handleMarkerPress = (petId: string | number) => {
+    setSelectedPetId(petId);
+  };
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    const coords = selectedPet
+      ? [
+          { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
+          ...selectedPetScans.map(({ latitude, longitude }) => ({ latitude, longitude })),
+        ]
+      : filteredMarkers.map(({ latitude, longitude }) => ({ latitude, longitude }));
+
+    if (coords.length === 0) return;
+
+    mapRef.current.fitToCoordinates(coords, {
+      edgePadding: { top: insets.top + 120, right: 40, bottom: 40, left: 40 },
+      animated: true,
+    });
+  }, [filteredMarkers, selectedPet, selectedPetScans, insets.top]);
 
   const handleBack = () => {
     if (router.canGoBack()) router.back();
@@ -147,26 +220,58 @@ export default function MapScreen() {
           );
         })}
         {filteredMarkers.map((pet) => {
-          const isSelected = selectedPetId === pet.id;
+          const isSelected = samePetId(selectedPetId, pet.id);
           return (
             <Marker
               key={`marker-${pet.id}`}
               coordinate={{ latitude: pet.latitude, longitude: pet.longitude }}
               pinColor="red"
               zIndex={isSelected ? 3 : 2}
-              onPress={() => setSelectedPetId(pet.id)}
+              onPress={() => handleMarkerPress(pet.id)}
             >
-              <Callout onPress={() => setSelectedPetId(pet.id)}>
+              <Callout onPress={() => handleMarkerPress(pet.id)}>
                 <View style={styles.callout}>
                   <Text style={styles.calloutTitle}>{pet.name || 'İsimsiz'}</Text>
                   <Text style={styles.calloutSub}>
-                    {isSelected ? 'Seçildi' : 'Son görülme'} · 500 m arama alanı
+                    {isSelected
+                      ? `${selectedPetScans.length} QR görülme`
+                      : 'Dokun → yeşil pin izi'}
+                    {' · '}500 m alan
                   </Text>
                 </View>
               </Callout>
             </Marker>
           );
         })}
+
+        {selectedPet && trailCoordinates.length > 1 && (
+          <Polyline
+            key={`trail-${selectedPet.id}`}
+            coordinates={trailCoordinates}
+            strokeColor="#22C55E"
+            strokeWidth={3}
+            lineDashPattern={[10, 8]}
+            zIndex={4}
+          />
+        )}
+
+        {selectedPetScans.map((scan, index) => (
+          <Marker
+            key={`scan-${scan.id}`}
+            coordinate={{ latitude: scan.latitude, longitude: scan.longitude }}
+            pinColor="green"
+            zIndex={5 + index}
+          >
+            <Callout>
+              <View style={styles.callout}>
+                <Text style={styles.calloutTitle}>QR görülme #{index + 1}</Text>
+                <Text style={styles.calloutSub}>
+                  {new Date(scan.scanned_at).toLocaleString('tr-TR')}
+                </Text>
+              </View>
+            </Callout>
+          </Marker>
+        ))}
       </MapView>
 
       {/* Top overlay: back + search */}
@@ -193,13 +298,21 @@ export default function MapScreen() {
           </View>
         </View>
 
-        <View style={styles.legendCard}>
-          <MapPin color={BRAND.danger} size={16} strokeWidth={2.5} />
-          <Text style={styles.legendText}>
-            {loading
-              ? 'İlanlar yükleniyor...'
-              : `${filteredMarkers.length} kayıp ilan haritada`}
-          </Text>
+        <View style={styles.legendRow}>
+          <View style={styles.legendCard}>
+            <MapPin color={BRAND.danger} size={16} strokeWidth={2.5} />
+            <Text style={styles.legendText}>
+              {loading
+                ? 'Yükleniyor...'
+                : `${filteredMarkers.length} kayıp · ${scans.length} tarama`}
+            </Text>
+          </View>
+          {selectedPetId != null && (
+            <View style={[styles.legendCard, styles.legendGreen]}>
+              <MapPin color={BRAND.success} size={16} strokeWidth={2.5} />
+              <Text style={styles.legendText}>{selectedPetScans.length} yeşil pin</Text>
+            </View>
+          )}
         </View>
 
         {!loading && petsMissingCoords > 0 && (
@@ -285,8 +398,8 @@ const styles = StyleSheet.create({
     color: BRAND.foreground,
     paddingVertical: 0,
   },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   legendCard: {
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -295,6 +408,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
   },
+  legendGreen: { backgroundColor: '#166534' },
   legendText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   hintBanner: {
     backgroundColor: BRAND.surface,
