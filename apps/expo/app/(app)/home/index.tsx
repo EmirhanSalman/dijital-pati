@@ -3,40 +3,32 @@ import { MotiView } from 'moti';
 import { useRouter } from 'expo-router';
 
 // ─── Web-Extracted Brand Colors ───────────────────────────────────
-// Source: apps/next/app/globals.css (shadcn slate theme)
-// --primary: 222.2 47.4% 11.2%     → #1A2744  (navy)
-// --primary-foreground: 210 40% 98% → #F8FAFC
-// --secondary: 210 40% 96.1%        → #F1F5F9  (slate-100)
-// --muted-foreground: 215.4 16.3% 46.9% → #64748B
-// --border: 214.3 31.8% 91.4%       → #E2E8F0
-// Brand accent (scrollbar/ring):     #6366F1  (indigo-500)
 const BRAND = {
-  primary: '#6366F1',       // Indigo-500 — web brand accent
-  primaryDark: '#4F46E5',   // Indigo-600
-  primaryBg: '#EEF2FF',     // Indigo-50
-  navy: '#1A2744',          // Web --primary (dark navy)
-  background: '#F8FAFC',    // Slate-50
-  surface: '#FFFFFF',
-  foreground: '#090E1A',    // Web --foreground
-  muted: '#64748B',         // Slate-500
-  border: '#E2E8F0',        // Slate-200
-  success: '#22C55E',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  info: '#3B82F6',
+  primary:     '#6366F1',
+  primaryDark: '#4F46E5',
+  primaryBg:   '#EEF2FF',
+  navy:        '#1A2744',
+  background:  '#F8FAFC',
+  surface:     '#FFFFFF',
+  foreground:  '#090E1A',
+  muted:       '#64748B',
+  border:      '#E2E8F0',
+  success:     '#22C55E',
+  danger:      '#EF4444',
+  info:        '#3B82F6',
 };
 
 const CARDS = [
-  { emoji: '🐾', label: 'Toplam Hayvan', value: '3', color: BRAND.primary },
-  { emoji: '✅', label: 'Aktif Görevler', value: '5', color: BRAND.success },
-  { emoji: '🔔', label: 'Son Uyarılar', value: '2', color: BRAND.danger },
-  { emoji: '💉', label: 'Yaklaşan Aşı', value: '1', color: BRAND.info },
+  { emoji: '🐾', label: 'Toplam Hayvan', value: '0', color: BRAND.primary },
+  { emoji: '✅', label: 'Aktif Görevler', value: '0', color: BRAND.success },
+  { emoji: '🔔', label: 'Son Uyarılar',  value: '0', color: BRAND.danger  },
+  { emoji: '💉', label: 'Yaklaşan Aşı',  value: '-', color: BRAND.info, comingSoon: true },
 ];
 
 const QUICK_ACTIONS = [
   { emoji: '🔍', label: 'Kayıp İlanları', description: 'Kayıp & bulunan hayvanlar', route: '/(app)/lost-pets', color: BRAND.primary },
-  { emoji: '💬', label: 'Pati Forum', description: 'Toplulukla bilgi paylaş', route: '/(app)/forum', color: BRAND.info },
-  { emoji: '📰', label: 'Haberler', description: 'Güncel ipuçları & haberler', route: '/(app)/news', color: BRAND.success },
+  { emoji: '💬', label: 'Pati Forum',     description: 'Toplulukla bilgi paylaş',   route: '/(app)/forum',     color: BRAND.info    },
+  { emoji: '📰', label: 'Haberler',       description: 'Güncel ipuçları & haberler', route: '/(app)/news',     color: BRAND.success  },
 ];
 
 export default function HomeScreen() {
@@ -55,11 +47,22 @@ export default function HomeScreen() {
             from={{ opacity: 0, translateY: 30 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', delay: i * 100, duration: 500 }}
-            style={[styles.summaryCard, { borderTopColor: card.color }]}
+            style={[
+              styles.summaryCard,
+              { borderTopColor: card.color },
+              card.comingSoon && styles.disabledCard,
+            ]}
           >
             <Text style={styles.cardEmoji}>{card.emoji}</Text>
-            <Text style={[styles.cardValue, { color: card.color }]}>{card.value}</Text>
+            <Text style={[styles.cardValue, { color: card.comingSoon ? BRAND.muted : card.color }]}>
+              {card.value}
+            </Text>
             <Text style={styles.cardLabel}>{card.label}</Text>
+            {card.comingSoon && (
+              <View style={styles.yakindaBadge}>
+                <Text style={styles.yakindaText}>Yakında</Text>
+              </View>
+            )}
           </MotiView>
         ))}
       </View>
@@ -75,10 +78,7 @@ export default function HomeScreen() {
           <Pressable
             key={action.route}
             style={({ pressed }) => [styles.actionCard, pressed && styles.pressed]}
-            onPress={() => {
-              console.log('Quick action pressed:', action.route);
-              router.push(action.route as any);
-            }}
+            onPress={() => router.push(action.route as any)}
           >
             <View style={[styles.actionIconCircle, { backgroundColor: `${action.color}18` }]}>
               <Text style={styles.actionEmoji}>{action.emoji}</Text>
@@ -92,7 +92,7 @@ export default function HomeScreen() {
         ))}
       </MotiView>
 
-      {/* Recent Activity */}
+      {/* Recent Activity — empty state until real data is available */}
       <MotiView
         from={{ opacity: 0, translateY: 20 }}
         animate={{ opacity: 1, translateY: 0 }}
@@ -100,12 +100,13 @@ export default function HomeScreen() {
         style={styles.recentCard}
       >
         <Text style={styles.sectionTitle}>Son Aktiviteler</Text>
-        {['Buddy aşısı güncellendi', "Luna'nın randevusu oluşturuldu", 'Max için yeni diyet planı'].map((item, i) => (
-          <View key={i} style={styles.activityItem}>
-            <View style={styles.activityDot} />
-            <Text style={styles.activityText}>{item}</Text>
-          </View>
-        ))}
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyEmoji}>📭</Text>
+          <Text style={styles.emptyText}>Henüz aktivite yok</Text>
+          <Text style={styles.emptySubtext}>
+            Evcil hayvan ekledikçe aktiviteler burada görünecek.
+          </Text>
+        </View>
       </MotiView>
     </ScrollView>
   );
@@ -130,10 +131,20 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
+    position: 'relative',
   },
+  disabledCard: { opacity: 0.55 },
   cardEmoji: { fontSize: 24, marginBottom: 6 },
   cardValue: { fontSize: 30, fontWeight: '800', marginBottom: 2 },
   cardLabel: { fontSize: 12, color: BRAND.muted },
+  yakindaBadge: {
+    position: 'absolute',
+    top: 8, right: 8,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 6,
+  },
+  yakindaText: { fontSize: 9, fontWeight: '700', color: '#D97706' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: BRAND.foreground, marginBottom: 12 },
   actionCard: {
     backgroundColor: BRAND.surface,
@@ -173,10 +184,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  activityItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  activityDot: {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: BRAND.primary, marginRight: 10,
-  },
-  activityText: { fontSize: 14, color: BRAND.muted, flex: 1 },
+  emptyState: { alignItems: 'center', paddingVertical: 24 },
+  emptyEmoji: { fontSize: 40, marginBottom: 10 },
+  emptyText: { fontSize: 16, fontWeight: '700', color: BRAND.navy, marginBottom: 6 },
+  emptySubtext: { fontSize: 13, color: BRAND.muted, textAlign: 'center', lineHeight: 20 },
 });

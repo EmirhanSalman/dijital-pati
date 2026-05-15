@@ -9,11 +9,13 @@ import '../global.css';
 type AuthContextType = {
   session: Session | null;
   isLoading: boolean;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
   isLoading: true,
+  signOut: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -29,10 +31,8 @@ function useAuthGate(session: Session | null, isLoading: boolean) {
     const inAuthGroup = String(segments?.[0] ?? '') === '(auth)';
 
     if (!session && !inAuthGroup) {
-      // No session → send to login
       router.replace('/(auth)');
     } else if (session && inAuthGroup) {
-      // Has session but on auth screen → send home
       router.replace('/(app)/home');
     }
   }, [session, isLoading, segments, router]);
@@ -44,13 +44,11 @@ export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Restore persisted session on app start
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setIsLoading(false);
     });
 
-    // 2. Listen to all future auth state changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
@@ -61,15 +59,18 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Run the auth gate routing logic
   useAuthGate(session, isLoading);
 
-  // Render nothing until we know the auth state (prevents flash)
   if (isLoading) return null;
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    // onAuthStateChange will fire with null session → gate redirects to /(auth)
+  };
 
   return (
     <SafeAreaProvider>
-      <AuthContext.Provider value={{ session, isLoading }}>
+      <AuthContext.Provider value={{ session, isLoading, signOut: handleSignOut }}>
         <Slot />
       </AuthContext.Provider>
     </SafeAreaProvider>

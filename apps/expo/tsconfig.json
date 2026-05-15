@@ -14,6 +14,12 @@
       ],
       "@dijital-pati/app/*": [
         "../../packages/app/*"
+      ],
+      "expo-router/types": [
+        "../../node_modules/expo-router/types"
+      ],
+      "nativewind/types": [
+        "../../node_modules/nativewind/types"
       ]
     }
   },
