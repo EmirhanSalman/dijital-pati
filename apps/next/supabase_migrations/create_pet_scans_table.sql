@@ -13,17 +13,5 @@ CREATE INDEX IF NOT EXISTS idx_pet_scans_scanned_at ON public.pet_scans(scanned_
 
 COMMENT ON TABLE public.pet_scans IS 'Scanner GPS sightings linked to a pet via QR collar scan';
 
--- RLS: allow inserts from mobile scanners; reads for map visualization
+-- RLS: see harden_pet_scans_and_pets_map_rls.sql for production policies.
 ALTER TABLE public.pet_scans ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Anyone can insert pet scans" ON public.pet_scans;
-CREATE POLICY "Anyone can insert pet scans"
-    ON public.pet_scans
-    FOR INSERT
-    WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anyone can read pet scans" ON public.pet_scans;
-CREATE POLICY "Anyone can read pet scans"
-    ON public.pet_scans
-    FOR SELECT
-    USING (true);

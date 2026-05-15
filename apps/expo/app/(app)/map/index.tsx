@@ -21,6 +21,7 @@ import {
   type MapPetMarker,
   type PetLike,
 } from '../../../lib/map-coords';
+import { coordinatesFitKey, logMap } from '../../../lib/map-debug';
 
 type PetRecord = PetLike & {
   name?: string | null;
@@ -72,9 +73,8 @@ const BRAND = {
 
 const SEARCH_RADIUS_METERS = 500;
 
-/** Soft danger radius — low fill, subtle stroke */
-const CIRCLE_FILL = 'rgba(239, 68, 68, 0.08)';
-const CIRCLE_STROKE = 'rgba(220, 38, 38, 0.35)';
+const CIRCLE_FILL = 'rgba(239, 68, 68, 0.06)';
+const CIRCLE_STROKE = 'rgba(220, 38, 38, 0.28)';
 
 const DEFAULT_REGION: Region = {
   latitude: ISPARTA_CENTER.latitude,
@@ -113,7 +113,8 @@ export default function MapScreen() {
   const { selectPetId } = useLocalSearchParams<{ selectPetId?: string }>();
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
-  const hasInitialFit = useRef(false);
+  const lastInitialFitKey = useRef('');
+  const lastSelectionFitKey = useRef('');
 
   const [pets, setPets] = useState<PetRecord[]>([]);
   const [scans, setScans] = useState<ScanMarker[]>([]);
@@ -135,6 +136,7 @@ export default function MapScreen() {
   const fetchMapData = useCallback(async () => {
     setLoading(true);
     setFetchError(null);
+    logMap('fetchMapData: start');
 
     const [petsRes, scansRes] = await Promise.all([
       supabase.from('pets').select('*'),
@@ -145,26 +147,28 @@ export default function MapScreen() {
     ]);
 
     if (petsRes.error) {
-      console.error('pets fetch error:', petsRes.error);
+      logMap('pets fetch error', petsRes.error);
       setFetchError(petsRes.error.message);
     } else if (petsRes.data) {
       setPets(petsRes.data as PetRecord[]);
+      logMap(`pets fetched: ${petsRes.data.length}`);
     }
 
     if (scansRes.error) {
-      console.error('pet_scans fetch error:', scansRes.error);
+      logMap('pet_scans fetch error', scansRes.error);
       setFetchError((prev) => prev ?? scansRes.error!.message);
       setScans([]);
     } else if (scansRes.data) {
-      setScans(
-        scansRes.data
-          .map((row) => normalizeScan(row as Record<string, unknown>))
-          .filter((row): row is ScanMarker => row !== null)
-      );
+      const normalized = scansRes.data
+        .map((row) => normalizeScan(row as Record<string, unknown>))
+        .filter((row): row is ScanMarker => row !== null);
+      setScans(normalized);
+      logMap(`pet_scans fetched: ${scansRes.data.length} raw, ${normalized.length} valid`);
     }
 
     setLoading(false);
-    hasInitialFit.current = false;
+    lastInitialFitKey.current = '';
+    logMap('fetchMapData: done');
   }, []);
 
   useFocusEffect(
@@ -175,6 +179,7 @@ export default function MapScreen() {
 
   useEffect(() => {
     if (selectPetId) {
+      logMap('selectPetId param', selectPetId);
       setSelectedPetId(selectPetId);
     }
   }, [selectPetId]);
@@ -204,11 +209,17 @@ export default function MapScreen() {
       .sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
   }, [scans, selectedPetId]);
 
-  /** Virtual paw trail: red pin → scan₁ → scan₂ → … (chronological) */
-  const pawTrailCoordinates = useMemo<LatLng[]>(() => {
-    if (!selectedPet) return [];
-    if (selectedPetScans.length === 0) return [];
+  useEffect(() => {
+    if (selectedPetId == null) return;
+    logMap('selectedPetScans', {
+      selectedPetId,
+      matchedCount: selectedPetScans.length,
+      totalScans: scans.length,
+    });
+  }, [selectedPetId, selectedPetScans.length, scans.length]);
 
+  const pawTrailCoordinates = useMemo<LatLng[]>(() => {
+    if (!selectedPet || selectedPetScans.length === 0) return [];
     return [
       { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
       ...selectedPetScans.map(({ latitude, longitude }) => ({ latitude, longitude })),
@@ -224,34 +235,56 @@ export default function MapScreen() {
     return [...petCoords, ...scanCoords];
   }, [filteredMarkers, scans]);
 
+  const initialFitKey = useMemo(
+    () => coordinatesFitKey(allVisibleCoordinates),
+    [allVisibleCoordinates]
+  );
+
   const selectionCoordinates = useMemo<LatLng[]>(() => {
     if (pawTrailCoordinates.length > 0) return pawTrailCoordinates;
     if (!selectedPet) return [];
     return [
-      {
-        latitude: selectedPet.mapLatitude,
-        longitude: selectedPet.mapLongitude,
-      },
+      { latitude: selectedPet.mapLatitude, longitude: selectedPet.mapLongitude },
     ];
   }, [pawTrailCoordinates, selectedPet]);
 
+  const selectionFitKey = useMemo(
+    () => coordinatesFitKey(selectionCoordinates),
+    [selectionCoordinates]
+  );
+
   const handleMarkerPress = (petId: string | number) => {
+    logMap('marker pressed', petId);
     setSelectedPetId(petId);
   };
 
   useEffect(() => {
     if (loading || selectedPetId != null) return;
+    if (!initialFitKey || initialFitKey === lastInitialFitKey.current) return;
 
-    fitMapToCoords(mapRef, allVisibleCoordinates, mapEdgePadding, hasInitialFit.current);
-    if (allVisibleCoordinates.length > 0) {
-      hasInitialFit.current = true;
-    }
-  }, [loading, allVisibleCoordinates, mapEdgePadding, selectedPetId]);
+    logMap('fitToCoordinates: initial viewport', { pointCount: allVisibleCoordinates.length });
+    fitMapToCoords(mapRef, allVisibleCoordinates, mapEdgePadding, lastInitialFitKey.current !== '');
+    lastInitialFitKey.current = initialFitKey;
+  }, [loading, initialFitKey, allVisibleCoordinates, mapEdgePadding, selectedPetId]);
 
   useEffect(() => {
-    if (!selectedPet || selectionCoordinates.length === 0) return;
+    if (!selectedPet || !selectionFitKey) return;
+    if (selectionFitKey === lastSelectionFitKey.current) return;
+
+    logMap('fitToCoordinates: selection viewport', {
+      petId: selectedPet.id,
+      scanCount: selectedPetScans.length,
+    });
     fitMapToCoords(mapRef, selectionCoordinates, mapEdgePadding, true);
-  }, [selectedPet, selectionCoordinates, mapEdgePadding]);
+    lastSelectionFitKey.current = selectionFitKey;
+  }, [selectedPet, selectionFitKey, selectionCoordinates, selectedPetScans.length, mapEdgePadding]);
+
+  useEffect(() => {
+    if (!selectPetId || loading || !selectedPet) return;
+    if (!selectionFitKey || selectionFitKey === lastSelectionFitKey.current) return;
+    fitMapToCoords(mapRef, selectionCoordinates, mapEdgePadding, true);
+    lastSelectionFitKey.current = selectionFitKey;
+  }, [selectPetId, loading, selectedPet, selectionFitKey, selectionCoordinates, mapEdgePadding]);
 
   const handleBack = () => {
     navigateScreenBack(router, '/(app)/home');
@@ -275,7 +308,7 @@ export default function MapScreen() {
               radius={SEARCH_RADIUS_METERS}
               fillColor={CIRCLE_FILL}
               strokeColor={CIRCLE_STROKE}
-              strokeWidth={1.5}
+              strokeWidth={1}
               zIndex={isSelected ? 2 : 1}
             />
           );

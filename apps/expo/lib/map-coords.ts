@@ -83,12 +83,14 @@ export function buildMapPetMarkers<T extends PetLike>(pets: T[]): MapPetMarker<T
   const result: MapPetMarker<T>[] = [];
 
   for (const group of buckets.values()) {
-    if (group.length === 1) {
-      result.push(group[0]);
+    const sorted = [...group].sort((a, b) => Number(a.id) - Number(b.id));
+
+    if (sorted.length === 1) {
+      result.push(sorted[0]);
       continue;
     }
 
-    group.forEach((marker, index) => {
+    sorted.forEach((marker, index) => {
       const angle = (2 * Math.PI * index) / group.length;
       const ring = 1 + Math.floor(index / 8) * 0.45;
       const offset = SPREAD_RADIUS_DEG * ring;

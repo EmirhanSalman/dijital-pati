@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, ScanLine } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
 import { parsePetIdFromQr } from '../../../lib/qr';
+import { logScan } from '../../../lib/map-debug';
 
 const BRAND = {
   primary: '#6366F1',
@@ -67,16 +68,31 @@ export default function ScannerScreen() {
 
       scanLock.current = true;
       setProcessing(true);
+      logScan('QR scanned', { identifier });
 
       try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session) {
+          logScan('insert blocked: no auth session');
+          Alert.alert('Giriş gerekli', 'QR taraması kaydetmek için giriş yapmalısınız.');
+          return;
+        }
+
         const petDbId = await resolvePetDbId(identifier);
         if (petDbId == null) {
+          logScan('pet not found for identifier', identifier);
           Alert.alert('Kayıt bulunamadı', 'QR koduna ait evcil hayvan bulunamadı.');
           return;
         }
 
+        logScan('resolved pet id (BIGINT)', petDbId);
+
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
+          logScan('location permission denied', status);
           Alert.alert(
             'Konum gerekli',
             'Görülme konumunu kaydetmek için konum izni vermeniz gerekiyor.'
@@ -91,11 +107,14 @@ export default function ScannerScreen() {
         const { latitude, longitude } = position.coords;
 
         if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          logScan('invalid GPS coords', { latitude, longitude });
           Alert.alert('Konum hatası', 'GPS koordinatları alınamadı. Lütfen tekrar deneyin.');
           return;
         }
 
         const scannedAt = new Date().toISOString();
+        logScan('inserting pet_scan', { pet_id: petDbId, latitude, longitude, scanned_at: scannedAt });
+
         const { data: inserted, error } = await supabase
           .from('pet_scans')
           .insert({
@@ -108,17 +127,20 @@ export default function ScannerScreen() {
           .single();
 
         if (error) {
-          console.error('pet_scans insert error:', error);
+          logScan('pet_scans insert error', error);
+          const rlsHint = error.code === '42501' || error.message?.toLowerCase().includes('policy');
           Alert.alert(
             'Kayıt hatası',
-            error.message.includes('pet_scans')
-              ? 'pet_scans tablosu bulunamadı. create_pet_scans_table.sql migrasyonunu çalıştırın.'
-              : `Konum kaydedilemedi: ${error.message}`
+            rlsHint
+              ? 'İzin reddedildi. harden_pet_scans_and_pets_map_rls.sql migrasyonunu çalıştırın ve giriş yaptığınızdan emin olun.'
+              : error.message.includes('pet_scans')
+                ? 'pet_scans tablosu bulunamadı. create_pet_scans_table.sql migrasyonunu çalıştırın.'
+                : `Konum kaydedilemedi: ${error.message}`
           );
           return;
         }
 
-        console.log('pet_scans inserted:', inserted);
+        logScan('pet_scans insert success', inserted);
 
         Alert.alert('Başarılı', 'Görülme konumu kaydedildi. Haritada yeşil pin olarak görünecek.', [
           {
@@ -138,6 +160,9 @@ export default function ScannerScreen() {
               }),
           },
         ]);
+      } catch (err) {
+        logScan('unexpected scan error', err);
+        Alert.alert('Hata', 'Tarama sırasında beklenmeyen bir hata oluştu.');
       } finally {
         setProcessing(false);
         setTimeout(() => {
