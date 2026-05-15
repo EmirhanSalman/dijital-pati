@@ -2,17 +2,41 @@ import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { MotiView } from 'moti';
 import { useRouter } from 'expo-router';
 
+// ─── Web-Extracted Brand Colors ───────────────────────────────────
+// Source: apps/next/app/globals.css (shadcn slate theme)
+// --primary: 222.2 47.4% 11.2%     → #1A2744  (navy)
+// --primary-foreground: 210 40% 98% → #F8FAFC
+// --secondary: 210 40% 96.1%        → #F1F5F9  (slate-100)
+// --muted-foreground: 215.4 16.3% 46.9% → #64748B
+// --border: 214.3 31.8% 91.4%       → #E2E8F0
+// Brand accent (scrollbar/ring):     #6366F1  (indigo-500)
+const BRAND = {
+  primary: '#6366F1',       // Indigo-500 — web brand accent
+  primaryDark: '#4F46E5',   // Indigo-600
+  primaryBg: '#EEF2FF',     // Indigo-50
+  navy: '#1A2744',          // Web --primary (dark navy)
+  background: '#F8FAFC',    // Slate-50
+  surface: '#FFFFFF',
+  foreground: '#090E1A',    // Web --foreground
+  muted: '#64748B',         // Slate-500
+  border: '#E2E8F0',        // Slate-200
+  success: '#22C55E',
+  danger: '#EF4444',
+  warning: '#F59E0B',
+  info: '#3B82F6',
+};
+
 const CARDS = [
-  { emoji: '🐾', label: 'Toplam Hayvan', value: '3', color: '#FF6B00' },
-  { emoji: '✅', label: 'Aktif Görevler', value: '5', color: '#34C759' },
-  { emoji: '🔔', label: 'Son Uyarılar', value: '2', color: '#FF3B30' },
-  { emoji: '💉', label: 'Yaklaşan Aşı', value: '1', color: '#007AFF' },
+  { emoji: '🐾', label: 'Toplam Hayvan', value: '3', color: BRAND.primary },
+  { emoji: '✅', label: 'Aktif Görevler', value: '5', color: BRAND.success },
+  { emoji: '🔔', label: 'Son Uyarılar', value: '2', color: BRAND.danger },
+  { emoji: '💉', label: 'Yaklaşan Aşı', value: '1', color: BRAND.info },
 ];
 
 const QUICK_ACTIONS = [
-  { emoji: '🔍', label: 'Kayıp İlanları', description: 'Kayıp & bulunan hayvanlar', route: '/(app)/lost-pets', color: '#FF6B00' },
-  { emoji: '💬', label: 'Pati Forum', description: 'Toplulukla bilgi paylaş', route: '/(app)/forum', color: '#007AFF' },
-  { emoji: '📰', label: 'Haberler', description: 'Güncel ipuçları & haberler', route: '/(app)/news', color: '#34C759' },
+  { emoji: '🔍', label: 'Kayıp İlanları', description: 'Kayıp & bulunan hayvanlar', route: '/(app)/lost-pets', color: BRAND.primary },
+  { emoji: '💬', label: 'Pati Forum', description: 'Toplulukla bilgi paylaş', route: '/(app)/forum', color: BRAND.info },
+  { emoji: '📰', label: 'Haberler', description: 'Güncel ipuçları & haberler', route: '/(app)/news', color: BRAND.success },
 ];
 
 export default function HomeScreen() {
@@ -51,7 +75,10 @@ export default function HomeScreen() {
           <Pressable
             key={action.route}
             style={({ pressed }) => [styles.actionCard, pressed && styles.pressed]}
-            onPress={() => router.push(action.route as any)}
+            onPress={() => {
+              console.log('Quick action pressed:', action.route);
+              router.push(action.route as any);
+            }}
           >
             <View style={[styles.actionIconCircle, { backgroundColor: `${action.color}18` }]}>
               <Text style={styles.actionEmoji}>{action.emoji}</Text>
@@ -85,18 +112,20 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F2F2F7' },
+  screen: { flex: 1, backgroundColor: BRAND.background },
   container: { padding: 20, paddingBottom: 40 },
-  greeting: { fontSize: 28, fontWeight: '800', color: '#1C1C1E', marginBottom: 4 },
-  subtitle: { fontSize: 16, color: '#8E8E93', marginBottom: 20 },
+  greeting: { fontSize: 28, fontWeight: '800', color: BRAND.foreground, marginBottom: 4 },
+  subtitle: { fontSize: 16, color: BRAND.muted, marginBottom: 20 },
   cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
   summaryCard: {
     width: '47%',
-    backgroundColor: '#fff',
+    backgroundColor: BRAND.surface,
     borderRadius: 14,
     borderTopWidth: 4,
     padding: 14,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    shadowColor: BRAND.navy,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
@@ -104,37 +133,41 @@ const styles = StyleSheet.create({
   },
   cardEmoji: { fontSize: 24, marginBottom: 6 },
   cardValue: { fontSize: 30, fontWeight: '800', marginBottom: 2 },
-  cardLabel: { fontSize: 12, color: '#8E8E93' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C1E', marginBottom: 12 },
+  cardLabel: { fontSize: 12, color: BRAND.muted },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: BRAND.foreground, marginBottom: 12 },
   actionCard: {
-    backgroundColor: '#fff',
+    backgroundColor: BRAND.surface,
     borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    shadowColor: BRAND.navy,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
   },
-  pressed: { opacity: 0.8 },
+  pressed: { opacity: 0.8, transform: [{ scale: 0.99 }] },
   actionIconCircle: {
     width: 48, height: 48, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center', marginRight: 14,
   },
   actionEmoji: { fontSize: 24 },
   actionText: { flex: 1 },
-  actionLabel: { fontSize: 16, fontWeight: '700', color: '#1C1C1E', marginBottom: 2 },
-  actionDesc: { fontSize: 13, color: '#8E8E93' },
+  actionLabel: { fontSize: 16, fontWeight: '700', color: BRAND.foreground, marginBottom: 2 },
+  actionDesc: { fontSize: 13, color: BRAND.muted },
   chevron: { fontSize: 26, fontWeight: '300' },
   recentCard: {
-    backgroundColor: '#fff',
+    backgroundColor: BRAND.surface,
     borderRadius: 14,
     padding: 16,
     marginTop: 4,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    shadowColor: BRAND.navy,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
@@ -143,7 +176,7 @@ const styles = StyleSheet.create({
   activityItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   activityDot: {
     width: 8, height: 8, borderRadius: 4,
-    backgroundColor: '#FF6B00', marginRight: 10,
+    backgroundColor: BRAND.primary, marginRight: 10,
   },
-  activityText: { fontSize: 14, color: '#3C3C43', flex: 1 },
+  activityText: { fontSize: 14, color: BRAND.muted, flex: 1 },
 });

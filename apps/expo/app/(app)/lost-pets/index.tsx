@@ -1,10 +1,27 @@
-import { ScrollView, View, Text, Pressable, StyleSheet, Image } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Image, Alert } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
+
+// ─── Web-Extracted Brand Colors ───────────────────────────────────
+const BRAND = {
+  primary: '#6366F1',       // Indigo-500 (web scrollbar/accent)
+  primaryBg: '#EEF2FF',     // Indigo-50
+  primaryMid: '#C7D2FE',    // Indigo-200
+  navy: '#1A2744',          // Web --primary
+  background: '#F8FAFC',    // Slate-50 (web --background equivalent)
+  surface: '#FFFFFF',
+  foreground: '#090E1A',    // Web --foreground
+  muted: '#64748B',         // Web --muted-foreground (slate-500)
+  border: '#E2E8F0',        // Web --border
+  danger: '#EF4444',
+  dangerBg: '#FEF2F2',
+};
 
 export default function LostPetsScreen() {
   const [pets, setPets] = useState<any[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     async function fetchPets() {
@@ -33,7 +50,13 @@ export default function LostPetsScreen() {
           animate={{ opacity: 1, translateX: 0 }}
           transition={{ type: 'timing', delay: i * 100, duration: 500 }}
         >
-          <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            onPress={() => {
+              console.log('Pet card pressed:', pet.id, pet.name);
+              Alert.alert('Hayvan Detayı', `${pet.name} detay sayfasına gidiliyor...`);
+            }}
+          >
             <View style={styles.cardLeft}>
               <View style={styles.emojiCircle}>
                 {pet.image_url ? (
@@ -58,7 +81,13 @@ export default function LostPetsScreen() {
         </MotiView>
       ))}
 
-      <Pressable style={styles.addBtn}>
+      <Pressable
+        style={({ pressed }) => [styles.addBtn, pressed && styles.addBtnPressed]}
+        onPress={() => {
+          console.log('New lost pet listing pressed');
+          Alert.alert('Yeni İlan', 'Yeni kayıp hayvan ilanı oluşturma ekranı açılıyor...');
+        }}
+      >
         <Text style={styles.addBtnText}>+ Yeni İlan Ver</Text>
       </Pressable>
     </ScrollView>
@@ -66,49 +95,55 @@ export default function LostPetsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F2F2F7' },
+  screen: { flex: 1, backgroundColor: BRAND.background },
   container: { padding: 16, paddingBottom: 40 },
   banner: {
-    backgroundColor: '#FF6B00',
+    backgroundColor: BRAND.primary,
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
   },
   bannerTitle: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  bannerSub: { fontSize: 14, color: '#FFE0CC' },
+  bannerSub: { fontSize: 14, color: BRAND.primaryMid },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: BRAND.surface,
     borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    shadowColor: BRAND.navy,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
   },
-  pressed: { opacity: 0.85 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   cardLeft: { marginRight: 12 },
   emojiCircle: {
     width: 52, height: 52, borderRadius: 26,
-    backgroundColor: '#FFF3EB', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: BRAND.primaryBg, alignItems: 'center', justifyContent: 'center',
     overflow: 'hidden',
   },
   petImage: { width: 52, height: 52 },
   emoji: { fontSize: 26 },
   cardBody: { flex: 1 },
-  petName: { fontSize: 17, fontWeight: '700', color: '#1C1C1E', marginBottom: 2 },
-  petSpecies: { fontSize: 13, color: '#8E8E93', marginBottom: 4 },
-  petLocation: { fontSize: 13, color: '#636366' },
+  petName: { fontSize: 17, fontWeight: '700', color: BRAND.foreground, marginBottom: 2 },
+  petSpecies: { fontSize: 13, color: BRAND.muted, marginBottom: 4 },
+  petLocation: { fontSize: 13, color: BRAND.muted },
   cardRight: { alignItems: 'flex-end', gap: 6 },
-  date: { fontSize: 12, color: '#AEAEB2' },
-  urgentBadge: { backgroundColor: '#FF3B3015', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  urgentText: { fontSize: 12, fontWeight: '600', color: '#FF3B30' },
+  date: { fontSize: 12, color: '#94A3B8' },
+  urgentBadge: { backgroundColor: BRAND.dangerBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  urgentText: { fontSize: 12, fontWeight: '600', color: BRAND.danger },
   addBtn: {
-    backgroundColor: '#FF6B00', borderRadius: 14, paddingVertical: 16,
-    alignItems: 'center', marginTop: 8,
+    backgroundColor: BRAND.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
   },
+  addBtnPressed: { backgroundColor: '#4F46E5', opacity: 0.9 },
   addBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

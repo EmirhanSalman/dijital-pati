@@ -1,14 +1,27 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Alert } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 
+// ─── Web-Extracted Brand Colors ───────────────────────────────────
+const BRAND = {
+  primary: '#6366F1',       // Indigo-500 (web scrollbar/accent)
+  primaryBg: '#EEF2FF',     // Indigo-50
+  primaryMid: '#C7D2FE',    // Indigo-200
+  navy: '#1A2744',          // Web --primary
+  background: '#F8FAFC',    // Slate-50
+  surface: '#FFFFFF',
+  foreground: '#090E1A',    // Web --foreground
+  muted: '#64748B',         // Web --muted-foreground
+  border: '#E2E8F0',        // Web --border
+};
+
 const CATEGORY_COLORS: Record<string, string> = {
-  Beslenme: '#34C759',
-  Tavsiye: '#007AFF',
-  Davranış: '#FF9500',
-  Veteriner: '#FF3B30',
-  Genel: '#8E8E93',
+  Beslenme: '#22C55E',
+  Tavsiye: '#3B82F6',
+  Davranış: '#F59E0B',
+  Veteriner: '#EF4444',
+  Genel: '#6366F1',
 };
 
 export default function ForumScreen() {
@@ -41,7 +54,13 @@ export default function ForumScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'timing', delay: i * 100, duration: 500 }}
         >
-          <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            onPress={() => {
+              console.log('Forum thread pressed:', t.id, t.title);
+              Alert.alert('Forum Konusu', `"${t.title}" konusuna gidiliyor...`);
+            }}
+          >
             <View style={styles.cardTop}>
               <Text style={styles.threadEmoji}>💬</Text>
               <View style={[styles.categoryBadge, { backgroundColor: `${CATEGORY_COLORS['Genel']}20` }]}>
@@ -57,7 +76,13 @@ export default function ForumScreen() {
         </MotiView>
       ))}
 
-      <Pressable style={styles.newPostBtn}>
+      <Pressable
+        style={({ pressed }) => [styles.newPostBtn, pressed && styles.newPostBtnPressed]}
+        onPress={() => {
+          console.log('New forum post pressed');
+          Alert.alert('Yeni Konu', 'Yeni forum konusu oluşturma ekranı açılıyor...');
+        }}
+      >
         <Text style={styles.newPostText}>+ Yeni Konu Aç</Text>
       </Pressable>
     </ScrollView>
@@ -65,39 +90,45 @@ export default function ForumScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F2F2F7' },
+  screen: { flex: 1, backgroundColor: BRAND.background },
   container: { padding: 16, paddingBottom: 40 },
   header: {
-    backgroundColor: '#FF6B00',
+    backgroundColor: BRAND.primary,
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
   },
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  headerSub: { fontSize: 14, color: '#FFE0CC' },
+  headerSub: { fontSize: 14, color: BRAND.primaryMid },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: BRAND.surface,
     borderRadius: 14,
     padding: 16,
     marginBottom: 10,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    shadowColor: BRAND.navy,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
   },
-  pressed: { opacity: 0.85 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   threadEmoji: { fontSize: 22 },
   categoryBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
   categoryText: { fontSize: 12, fontWeight: '700' },
-  threadTitle: { fontSize: 15, fontWeight: '600', color: '#1C1C1E', lineHeight: 22, marginBottom: 10 },
+  threadTitle: { fontSize: 15, fontWeight: '600', color: BRAND.foreground, lineHeight: 22, marginBottom: 10 },
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between' },
-  author: { fontSize: 13, color: '#8E8E93' },
-  replies: { fontSize: 13, color: '#8E8E93' },
+  author: { fontSize: 13, color: BRAND.muted },
+  replies: { fontSize: 13, color: BRAND.muted },
   newPostBtn: {
-    backgroundColor: '#FF6B00', borderRadius: 14, paddingVertical: 16,
-    alignItems: 'center', marginTop: 8,
+    backgroundColor: BRAND.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
   },
+  newPostBtnPressed: { backgroundColor: '#4F46E5', opacity: 0.9 },
   newPostText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

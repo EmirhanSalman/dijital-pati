@@ -1,7 +1,20 @@
-import { ScrollView, View, Text, Pressable, StyleSheet, Image } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Image, Alert } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
+
+// ─── Web-Extracted Brand Colors ───────────────────────────────────
+const BRAND = {
+  primary: '#6366F1',       // Indigo-500 (web scrollbar/accent)
+  primaryBg: '#EEF2FF',     // Indigo-50
+  primaryMid: '#C7D2FE',    // Indigo-200
+  navy: '#1A2744',          // Web --primary
+  background: '#F8FAFC',    // Slate-50
+  surface: '#FFFFFF',
+  foreground: '#090E1A',    // Web --foreground
+  muted: '#64748B',         // Web --muted-foreground
+  border: '#E2E8F0',        // Web --border
+};
 
 export default function NewsScreen() {
   const [news, setNews] = useState<any[]>([]);
@@ -33,8 +46,14 @@ export default function NewsScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'timing', delay: i * 110, duration: 500 }}
         >
-          <Pressable style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-            <View style={[styles.colorBar, { backgroundColor: '#FF6B00' }]} />
+          <Pressable
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+            onPress={() => {
+              console.log('News item pressed:', item.id, item.title);
+              Alert.alert('Haber Detayı', `"${item.title}" haberine gidiliyor...`);
+            }}
+          >
+            <View style={[styles.colorBar, { backgroundColor: BRAND.primary }]} />
             <View style={styles.cardContent}>
               <View style={styles.cardTop}>
                 {item.image_url ? (
@@ -42,8 +61,8 @@ export default function NewsScreen() {
                 ) : (
                   <Text style={styles.cardEmoji}>📰</Text>
                 )}
-                <View style={[styles.categoryBadge, { backgroundColor: `#FF6B0018` }]}>
-                  <Text style={[styles.categoryText, { color: '#FF6B00' }]}>Haber</Text>
+                <View style={[styles.categoryBadge, { backgroundColor: BRAND.primaryBg }]}>
+                  <Text style={[styles.categoryText, { color: BRAND.primary }]}>Haber</Text>
                 </View>
                 <Text style={styles.readTime}>📅 {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Yeni'}</Text>
               </View>
@@ -58,36 +77,38 @@ export default function NewsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F2F2F7' },
+  screen: { flex: 1, backgroundColor: BRAND.background },
   container: { padding: 16, paddingBottom: 40 },
   header: {
-    backgroundColor: '#FF6B00',
+    backgroundColor: BRAND.primary,
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
   },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  headerSub: { fontSize: 13, color: '#FFE0CC' },
+  headerSub: { fontSize: 13, color: BRAND.primaryMid },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: BRAND.surface,
     borderRadius: 14,
     flexDirection: 'row',
     marginBottom: 10,
     overflow: 'hidden',
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    shadowColor: BRAND.navy,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
     elevation: 2,
   },
-  pressed: { opacity: 0.85 },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
   colorBar: { width: 5 },
   cardContent: { flex: 1, padding: 14 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   cardEmoji: { fontSize: 18 },
   categoryBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   categoryText: { fontSize: 12, fontWeight: '700' },
-  readTime: { fontSize: 12, color: '#AEAEB2', marginLeft: 'auto' },
-  title: { fontSize: 15, fontWeight: '700', color: '#1C1C1E', lineHeight: 22, marginBottom: 6 },
-  excerpt: { fontSize: 13, color: '#636366', lineHeight: 20 },
+  readTime: { fontSize: 12, color: '#94A3B8', marginLeft: 'auto' },
+  title: { fontSize: 15, fontWeight: '700', color: BRAND.foreground, lineHeight: 22, marginBottom: 6 },
+  excerpt: { fontSize: 13, color: BRAND.muted, lineHeight: 20 },
 });
