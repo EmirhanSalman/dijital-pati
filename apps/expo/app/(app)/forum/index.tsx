@@ -1,6 +1,7 @@
-import { ScrollView, View, Text, Pressable, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, RefreshControl, Image } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 
 // ─── Web-Extracted Brand Colors ───────────────────────────────────
@@ -25,6 +26,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function ForumScreen() {
+  const router = useRouter();
   const [threads, setThreads] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -78,17 +80,19 @@ export default function ForumScreen() {
         >
           <Pressable
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-            onPress={() => {
-              console.log('Forum thread pressed:', t.id, t.title);
-              Alert.alert('Forum Konusu', `"${t.title}" konusuna gidiliyor...`);
-            }}
+            onPress={() => {}}
           >
             <View style={styles.cardTop}>
               <Text style={styles.threadEmoji}>💬</Text>
               <View style={[styles.categoryBadge, { backgroundColor: `${CATEGORY_COLORS['Genel']}20` }]}>
-                <Text style={[styles.categoryText, { color: CATEGORY_COLORS['Genel'] }]}>Genel</Text>
+                <Text style={[styles.categoryText, { color: CATEGORY_COLORS[t.category] ?? CATEGORY_COLORS.Genel }]}>
+                  {t.category || 'Genel'}
+                </Text>
               </View>
             </View>
+            {t.image_url ? (
+              <Image source={{ uri: t.image_url }} style={styles.threadImage} resizeMode="cover" />
+            ) : null}
             <Text style={styles.threadTitle}>{t.title}</Text>
             <View style={styles.cardBottom}>
               <Text style={styles.author}>👤 Kullanıcı</Text>
@@ -100,10 +104,7 @@ export default function ForumScreen() {
 
       <Pressable
         style={({ pressed }) => [styles.newPostBtn, pressed && styles.newPostBtnPressed]}
-        onPress={() => {
-          console.log('New forum post pressed');
-          Alert.alert('Yeni Konu', 'Yeni forum konusu oluşturma ekranı açılıyor...');
-        }}
+        onPress={() => router.push('/(app)/forum/create')}
       >
         <Text style={styles.newPostText}>+ Yeni Konu Aç</Text>
       </Pressable>
@@ -140,6 +141,13 @@ const styles = StyleSheet.create({
   threadEmoji: { fontSize: 22 },
   categoryBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
   categoryText: { fontSize: 12, fontWeight: '700' },
+  threadImage: {
+    width: '100%',
+    height: 140,
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: BRAND.primaryBg,
+  },
   threadTitle: { fontSize: 15, fontWeight: '600', color: BRAND.foreground, lineHeight: 22, marginBottom: 10 },
   cardBottom: { flexDirection: 'row', justifyContent: 'space-between' },
   author: { fontSize: 13, color: BRAND.muted },

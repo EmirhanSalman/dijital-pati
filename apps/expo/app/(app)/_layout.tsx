@@ -90,6 +90,7 @@ export default function AppLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="forum/create" options={{ href: null, title: 'Yeni Konu' }} />
       <Tabs.Screen
         name="news/index"
         options={{

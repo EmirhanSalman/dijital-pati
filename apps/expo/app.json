@@ -51,6 +51,12 @@
         {
           "cameraPermission": "Dijital Pati, evcil hayvan künyesindeki QR kodu okutmak için kameraya erişir."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Dijital Pati, profil ve evcil hayvan fotoğraflarını yüklemek için galerinize erişir."
+        }
       ]
     ]
   }

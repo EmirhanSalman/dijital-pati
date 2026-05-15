@@ -1,7 +1,20 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ScrollView,
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Image,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { MotiView } from 'moti';
 import { useAuth } from '../../_layout';
 import { useRouter } from 'expo-router';
+import { Camera } from 'lucide-react-native';
+import { supabase } from '../../../lib/supabase';
+import { pickImageUri, uploadImage, buildAvatarPath } from '../../../lib/storage';
 
 const BRAND = {
   primary:    '#6366F1',
@@ -24,6 +37,12 @@ type ProfileAction = {
   route?: string;
 };
 
+type ProfileRow = {
+  full_name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+};
+
 const ACTIONS: ProfileAction[] = [
   { emoji: '✏️', label: 'Profili Düzenle', description: 'Ad, soyad ve bilgileri güncelle', comingSoon: true },
   { emoji: '🔒', label: 'Gizlilik', description: 'Hesap güvenlik ayarları', comingSoon: true },
@@ -41,8 +60,59 @@ function YakindaBadge() {
 }
 
 export default function ProfileScreen() {
-  const { signOut } = useAuth();
+  const { session, signOut } = useAuth();
   const router = useRouter();
+  const userId = session?.user?.id;
+  const userEmail = session?.user?.email ?? 'Giriş yapılmadı';
+
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const loadProfile = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('full_name, username, avatar_url')
+      .eq('id', userId)
+      .maybeSingle();
+    if (data) setProfile(data);
+  }, [userId]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const displayName =
+    profile?.full_name || profile?.username || userEmail.split('@')[0] || 'Kullanıcı';
+
+  const handleAvatarPress = async () => {
+    if (!userId) {
+      Alert.alert('Giriş gerekli', 'Profil fotoğrafı yüklemek için giriş yapın.');
+      return;
+    }
+
+    const uri = await pickImageUri();
+    if (!uri) return;
+
+    setUploadingAvatar(true);
+    try {
+      const publicUrl = await uploadImage(uri, 'avatars', buildAvatarPath(userId));
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', userId);
+
+      if (error) throw new Error(error.message);
+
+      setProfile((prev) => ({ ...prev, avatar_url: publicUrl, full_name: prev?.full_name ?? null, username: prev?.username ?? null }));
+      Alert.alert('Başarılı', 'Profil fotoğrafınız güncellendi.');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Yükleme başarısız.';
+      Alert.alert('Hata', message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleSignOut = () => {
     signOut();
@@ -62,11 +132,31 @@ export default function ProfileScreen() {
         transition={{ type: 'spring', damping: 14, delay: 50 }}
         style={styles.header}
       >
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarEmoji}>😊</Text>
-        </View>
-        <Text style={styles.name}>Ahmet Kullanıcı</Text>
-        <Text style={styles.email}>ahmet@digitalpati.app</Text>
+        <Pressable
+          style={styles.avatarPressable}
+          onPress={handleAvatarPress}
+          disabled={uploadingAvatar}
+        >
+          <View style={styles.avatarCircle}>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarEmoji}>😊</Text>
+            )}
+            {uploadingAvatar ? (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            ) : (
+              <View style={styles.avatarBadge}>
+                <Camera color="#fff" size={14} strokeWidth={2.5} />
+              </View>
+            )}
+          </View>
+        </Pressable>
+        <Text style={styles.avatarHint}>Fotoğrafı değiştirmek için dokunun</Text>
+        <Text style={styles.name}>{displayName}</Text>
+        <Text style={styles.email}>{userEmail}</Text>
         <View style={styles.badge}>
           <Text style={styles.badgeText}>Premium Üye</Text>
         </View>
@@ -127,6 +217,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BRAND.background },
   container: { padding: 20, paddingBottom: 40 },
   header: { alignItems: 'center', marginBottom: 28 },
+  avatarPressable: { marginBottom: 6 },
   avatarCircle: {
     width: 100,
     height: 100,
@@ -134,14 +225,35 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    overflow: 'hidden',
     shadowColor: BRAND.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 8,
   },
+  avatarImage: { width: 100, height: 100 },
   avatarEmoji: { fontSize: 48 },
+  avatarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(26, 39, 68, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: BRAND.navy,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  avatarHint: { fontSize: 12, color: BRAND.muted, marginBottom: 10 },
   name: { fontSize: 22, fontWeight: '800', color: BRAND.foreground, marginBottom: 4 },
   email: { fontSize: 14, color: BRAND.muted, marginBottom: 10 },
   badge: {

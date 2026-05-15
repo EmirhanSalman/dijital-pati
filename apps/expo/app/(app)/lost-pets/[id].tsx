@@ -1,11 +1,14 @@
 import {
   ScrollView, View, Text, StyleSheet, Image,
-  Pressable, ActivityIndicator,
+  Pressable, ActivityIndicator, Alert,
 } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Camera } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../../_layout';
+import { pickImageUri, uploadImage, buildPetImagePath } from '../../../lib/storage';
 
 const C = {
   primary:    '#6366F1',
@@ -40,8 +43,10 @@ function goBack(router: ReturnType<typeof useRouter>) {
 export default function PetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { session } = useAuth();
   const [pet, setPet] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -91,6 +96,36 @@ export default function PetDetailScreen() {
   const statusKey = (pet.status || 'kayip').toLowerCase();
   const status = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.default;
 
+  const handleUpdatePhoto = async () => {
+    const userId = session?.user?.id;
+    if (!userId || !id) {
+      Alert.alert('Giriş gerekli', 'Fotoğraf yüklemek için giriş yapın.');
+      return;
+    }
+
+    const localUri = await pickImageUri();
+    if (!localUri) return;
+
+    setUploadingPhoto(true);
+    try {
+      const publicUrl = await uploadImage(localUri, 'pets', buildPetImagePath(userId, id));
+      const { error: updateError } = await supabase
+        .from('pets')
+        .update({ image_url: publicUrl })
+        .eq('id', id);
+
+      if (updateError) throw new Error(updateError.message);
+
+      setPet((prev: typeof pet) => ({ ...prev, image_url: publicUrl }));
+      Alert.alert('Başarılı', 'Hayvan fotoğrafı güncellendi.');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Fotoğraf yüklenemedi.';
+      Alert.alert('Hata', message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       {/* Hero Image / Avatar */}
@@ -100,13 +135,25 @@ export default function PetDetailScreen() {
         transition={{ type: 'timing', duration: 400 }}
         style={styles.heroCard}
       >
-        {imageUri ? (
-          <Image source={{ uri: imageUri }} style={styles.heroImage} resizeMode="cover" />
-        ) : (
-          <View style={styles.heroPlaceholder}>
-            <Text style={styles.heroEmoji}>🐾</Text>
+        <Pressable onPress={handleUpdatePhoto} disabled={uploadingPhoto}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.heroImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.heroPlaceholder}>
+              <Text style={styles.heroEmoji}>🐾</Text>
+            </View>
+          )}
+          <View style={styles.photoEditBadge}>
+            {uploadingPhoto ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Camera color="#fff" size={16} strokeWidth={2.5} />
+                <Text style={styles.photoEditText}>Fotoğrafı güncelle</Text>
+              </>
+            )}
           </View>
-        )}
+        </Pressable>
 
         {/* Status Badge */}
         <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
@@ -218,6 +265,20 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusText: { fontSize: 13, fontWeight: '700' },
+  photoEditBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(26, 39, 68, 0.75)',
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  photoEditText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
   // ── Info ──
   infoCard: {
