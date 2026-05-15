@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, Pressable, StyleSheet, Alert } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
@@ -26,17 +26,39 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function ForumScreen() {
   const [threads, setThreads] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function fetchThreads() {
+    const { data } = await supabase.from('forum_posts').select('*');
+    if (data) setThreads(data);
+  }
 
   useEffect(() => {
-    async function fetchThreads() {
-      const { data, error } = await supabase.from('forum_posts').select('*');
-      if (data) setThreads(data);
-    }
     fetchThreads();
   }, []);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchThreads();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#6366F1']}
+          tintColor="#6366F1"
+        />
+      }
+    >
       <MotiView
         from={{ opacity: 0, translateY: -10 }}
         animate={{ opacity: 1, translateY: 0 }}

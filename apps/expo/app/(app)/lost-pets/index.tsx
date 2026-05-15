@@ -1,4 +1,4 @@
-import { ScrollView, View, Text, Pressable, StyleSheet, Image, Alert } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Image, Alert, RefreshControl } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
@@ -21,18 +21,40 @@ const BRAND = {
 
 export default function LostPetsScreen() {
   const [pets, setPets] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
+  async function fetchPets() {
+    const { data } = await supabase.from('pets').select('*');
+    if (data) setPets(data);
+  }
+
   useEffect(() => {
-    async function fetchPets() {
-      const { data, error } = await supabase.from('pets').select('*');
-      if (data) setPets(data);
-    }
     fetchPets();
   }, []);
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchPets();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={['#6366F1']}
+          tintColor="#6366F1"
+        />
+      }
+    >
       <MotiView
         from={{ opacity: 0, translateY: -10 }}
         animate={{ opacity: 1, translateY: 0 }}
