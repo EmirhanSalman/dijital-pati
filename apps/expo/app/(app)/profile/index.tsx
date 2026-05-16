@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { MotiView } from 'moti';
 import { useAuth } from '../../_layout';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Camera } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
 import { pickImageUri, uploadImage, buildAvatarPath } from '../../../lib/storage';
@@ -44,10 +44,20 @@ type ProfileRow = {
 };
 
 const ACTIONS: ProfileAction[] = [
-  { emoji: '✏️', label: 'Profili Düzenle', description: 'Ad, soyad ve bilgileri güncelle', comingSoon: true },
+  {
+    emoji: '✏️',
+    label: 'Profili Düzenle',
+    description: 'Ad, soyad ve bilgileri güncelle',
+    route: '/(app)/profile/edit',
+  },
   { emoji: '🔒', label: 'Gizlilik', description: 'Hesap güvenlik ayarları', comingSoon: true },
   { emoji: '🔔', label: 'Bildirim Ayarları', description: 'Push ve hatırlatma tercihleri', route: '/(app)/settings' },
-  { emoji: '🐾', label: 'Evcil Hayvanlarım', description: 'Kayıtlı evcil hayvanlarınız', comingSoon: true },
+  {
+    emoji: '🐾',
+    label: 'Evcil Hayvanlarım',
+    description: 'Kayıtlı evcil hayvanlarınız',
+    route: '/(app)/profile/my-pets',
+  },
   { emoji: '❓', label: 'Destek', description: 'Yardım merkezi ve SSS', comingSoon: true },
 ];
 
@@ -81,6 +91,12 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
 
   const displayName =
     profile?.full_name || profile?.username || userEmail.split('@')[0] || 'Kullanıcı';
@@ -120,8 +136,11 @@ export default function ProfileScreen() {
   };
 
   const handleActionPress = (action: ProfileAction) => {
-    if (action.comingSoon) return;
-    if (action.route) router.push(action.route as any);
+    if (action.comingSoon || !action.route) return;
+    if (__DEV__) {
+      console.log('[Profile] navigate', action.label, '→', action.route);
+    }
+    router.push(action.route as Parameters<typeof router.push>[0]);
   };
 
   return (
@@ -167,6 +186,7 @@ export default function ProfileScreen() {
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ type: 'timing', delay: 250, duration: 600 }}
         style={styles.card}
+        pointerEvents="box-none"
       >
         {ACTIONS.map((action, i) => (
           <View key={action.label}>
@@ -178,6 +198,8 @@ export default function ProfileScreen() {
               ]}
               onPress={() => handleActionPress(action)}
               disabled={action.comingSoon}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !!action.comingSoon }}
             >
               <Text style={styles.actionEmoji}>{action.emoji}</Text>
               <View style={styles.actionText}>

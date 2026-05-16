@@ -1,0 +1,15 @@
+export const BRAND = {
+  primary: '#6366F1',
+  primaryBg: '#EEF2FF',
+  primaryMid: '#C7D2FE',
+  navy: '#1A2744',
+  background: '#F8FAFC',
+  surface: '#FFFFFF',
+  foreground: '#090E1A',
+  muted: '#64748B',
+  border: '#E2E8F0',
+  danger: '#EF4444',
+  dangerBg: '#FEF2F2',
+  success: '#22C55E',
+  successBg: '#F0FDF4',
+} as const;

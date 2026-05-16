@@ -102,8 +102,9 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile/index"
+        name="profile"
         options={{
+          headerShown: false,
           title: 'Profil',
           tabBarIcon: ({ color, focused }) => (
             <User color={color} size={focused ? 26 : 24} strokeWidth={focused ? 2.5 : 2} />
