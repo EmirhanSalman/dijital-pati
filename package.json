@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "web": "npm run dev --workspace=apps/next",
-    "mobile": "npm run start --workspace=apps/expo",
+    "mobile": "npx expo start apps/expo",
     "dev": "concurrently \"npm run web\" \"npm run mobile\"",
     "postinstall": "npx patch-package"
   },

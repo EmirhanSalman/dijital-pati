@@ -82,18 +82,19 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
-        name="forum/index"
+        name="forum"
         options={{
+          headerShown: false,
           title: 'Forum',
           tabBarIcon: ({ color, focused }) => (
             <MessageSquare color={color} size={focused ? 26 : 24} strokeWidth={focused ? 2.5 : 2} />
           ),
         }}
       />
-      <Tabs.Screen name="forum/create" options={{ href: null, title: 'Yeni Konu' }} />
       <Tabs.Screen
-        name="news/index"
+        name="news"
         options={{
+          headerShown: false,
           title: 'Haberler',
           tabBarIcon: ({ color, focused }) => (
             <Newspaper color={color} size={focused ? 26 : 24} strokeWidth={focused ? 2.5 : 2} />

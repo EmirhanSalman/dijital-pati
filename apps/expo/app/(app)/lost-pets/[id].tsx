@@ -4,13 +4,15 @@ import {
 } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect, useCallback } from 'react';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { HeaderBackButton } from '@react-navigation/elements';
 import { Camera } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/auth';
 import { pickImageUri, uploadImage, buildPetImagePath } from '../../../lib/storage';
 import { navigatePetDetailBack } from '../../../lib/navigation';
+import { getPetLostBadgeStyle, isLostPet } from '../../../lib/pet-status';
+import { formatPetLocationDisplay } from '../../../lib/pet-location';
 
 const C = {
   primary:    '#6366F1',
@@ -26,12 +28,6 @@ const C = {
   dangerBg:   '#FEF2F2',
   success:    '#22C55E',
   successBg:  '#F0FDF4',
-};
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  kayip:  { label: 'Kayıp', color: C.danger,  bg: C.dangerBg  },
-  bulundu:{ label: 'Bulundu', color: C.success, bg: C.successBg },
-  default:{ label: 'Kayıp', color: C.danger,  bg: C.dangerBg  },
 };
 
 export default function PetDetailScreen() {
@@ -55,23 +51,37 @@ export default function PetDetailScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchPet() {
-      if (!id) { setError('Hayvan bulunamadı.'); setLoading(false); return; }
-      const { data, error } = await supabase
-        .from('pets')
-        .select('*')
-        .eq('id', id)
-        .single();
-      if (error || !data) {
-        setError('Bu hayvan kaydı bulunamadı.');
-      } else {
-        setPet(data);
-      }
+  const fetchPet = useCallback(async () => {
+    if (!id) {
+      setError('Hayvan bulunamadı.');
       setLoading(false);
+      return;
     }
-    fetchPet();
+    setLoading(true);
+    const { data, error: fetchError } = await supabase
+      .from('pets')
+      .select('*')
+      .eq('id', id)
+      .single();
+    if (fetchError || !data) {
+      setError('Bu hayvan kaydı bulunamadı.');
+      setPet(null);
+    } else {
+      setPet(data);
+      setError(null);
+    }
+    setLoading(false);
   }, [id]);
+
+  useEffect(() => {
+    fetchPet();
+  }, [fetchPet]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchPet();
+    }, [fetchPet])
+  );
 
   const stackOptions = {
     title: 'Hayvan Detayı' as const,
@@ -112,13 +122,19 @@ export default function PetDetailScreen() {
   }
 
   const imageUri = pet.image_url?.replace('ipfs://', 'https://ipfs.io/ipfs/');
-  const statusKey = (pet.status || 'kayip').toLowerCase();
-  const status = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.default;
+  const lost = isLostPet(pet);
+  const status = getPetLostBadgeStyle(lost);
+  const locationText = formatPetLocationDisplay(pet);
+  const isOwner = Boolean(session?.user?.id && pet.owner_id === session.user.id);
 
   const handleUpdatePhoto = async () => {
     const userId = session?.user?.id;
     if (!userId || !id) {
       Alert.alert('Giriş gerekli', 'Fotoğraf yüklemek için giriş yapın.');
+      return;
+    }
+    if (!isOwner) {
+      Alert.alert('Yetkisiz', 'Yalnızca hayvan sahibi fotoğrafı güncelleyebilir.');
       return;
     }
 
@@ -156,7 +172,7 @@ export default function PetDetailScreen() {
         transition={{ type: 'timing', duration: 400 }}
         style={styles.heroCard}
       >
-        <Pressable onPress={handleUpdatePhoto} disabled={uploadingPhoto}>
+        <Pressable onPress={handleUpdatePhoto} disabled={uploadingPhoto || !isOwner}>
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.heroImage} resizeMode="cover" />
           ) : (
@@ -164,16 +180,18 @@ export default function PetDetailScreen() {
               <Text style={styles.heroEmoji}>🐾</Text>
             </View>
           )}
-          <View style={styles.photoEditBadge}>
-            {uploadingPhoto ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Camera color="#fff" size={16} strokeWidth={2.5} />
-                <Text style={styles.photoEditText}>Fotoğrafı güncelle</Text>
-              </>
-            )}
-          </View>
+          {isOwner ? (
+            <View style={styles.photoEditBadge}>
+              {uploadingPhoto ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Camera color="#fff" size={16} strokeWidth={2.5} />
+                  <Text style={styles.photoEditText}>Fotoğrafı güncelle</Text>
+                </>
+              )}
+            </View>
+          ) : null}
         </Pressable>
 
         {/* Status Badge */}
@@ -232,21 +250,7 @@ export default function PetDetailScreen() {
         style={styles.locationCard}
       >
         <Text style={styles.descTitle}>📍 Son Görüldüğü Yer</Text>
-        <Text style={styles.descBody}>{pet.last_seen_location || 'Konum belirtilmedi'}</Text>
-      </MotiView>
-
-      {/* Back Button */}
-      <MotiView
-        from={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ type: 'timing', delay: 450, duration: 400 }}
-      >
-        <Pressable
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.85 }]}
-          onPress={handleBack}
-        >
-          <Text style={styles.backBtnText}>← Listeye Dön</Text>
-        </Pressable>
+        <Text style={styles.descBody}>{locationText}</Text>
       </MotiView>
     </ScrollView>
     </>

@@ -26,6 +26,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
 import { getContract, getReadOnlyProvider } from "@/utils/web3";
 import { getGatewayUrl, fetchFromIpfsWithFallback } from "@/utils/ipfs";
+import ReportLostLocationDialog from "@/components/ReportLostLocationDialog";
 
 // Get contract address from environment variable, with fallback for local development
 const getContractAddress = (): string => {
@@ -51,6 +52,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
+  const [lostDialogOpen, setLostDialogOpen] = useState(false);
 
   useEffect(() => {
     if (id !== null && id !== undefined) {
@@ -222,9 +224,40 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     }
   };
 
+  const postToggleLost = async (
+    isLost: boolean,
+    latitude?: number,
+    longitude?: number
+  ) => {
+    if (!petData) throw new Error("Pet bilgisi bulunamadı.");
+
+    const response = await fetch("/api/pets/toggle-lost", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tokenId: petData.token_id,
+        isLost,
+        ...(isLost ? { latitude, longitude } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}: Durum güncellenemedi.`);
+    }
+
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+  };
+
   const handleToggleLostStatus = async () => {
     if (!petData) {
       setError("Pet bilgisi bulunamadı.");
+      return;
+    }
+
+    if (!petData.is_lost) {
+      setLostDialogOpen(true);
       return;
     }
 
@@ -232,38 +265,37 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     setError(null);
 
     try {
-      const response = await fetch("/api/pets/toggle-lost", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tokenId: petData.token_id,
-          isLost: !petData.is_lost,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${response.status}: Durum güncellenemedi.`);
-      }
-
-      const result = await response.json();
-
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      // Update local state
-      setPetData({ ...petData, is_lost: !petData.is_lost });
-      
-      // If blockchain data exists, update it too
+      await postToggleLost(false);
+      setPetData({ ...petData, is_lost: false });
       if (blockchainData) {
-        setBlockchainData({ ...blockchainData, isLost: !blockchainData.isLost });
+        setBlockchainData({ ...blockchainData, isLost: false });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Toggle lost status error:", err);
-      setError(err.message || "Durum güncellenirken bir hata oluştu.");
+      setError(
+        err instanceof Error ? err.message : "Durum güncellenirken bir hata oluştu."
+      );
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const handleConfirmLostReport = async (latitude: number, longitude: number) => {
+    if (!petData) return;
+    setToggling(true);
+    setError(null);
+    try {
+      await postToggleLost(true, latitude, longitude);
+      setPetData({ ...petData, is_lost: true, latitude, longitude });
+      if (blockchainData) {
+        setBlockchainData({ ...blockchainData, isLost: true });
+      }
+      setLostDialogOpen(false);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Kayıp bildirimi oluşturulamadı."
+      );
+      throw err;
     } finally {
       setToggling(false);
     }
@@ -344,10 +376,11 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     );
   }
 
+  const qrSlug = petData?.token_id != null ? String(petData.token_id) : id;
   const petUrl =
     typeof window !== "undefined"
-      ? `${window.location.origin}/pet/${id}`
-      : `https://dijitalpati.com/pet/${id}`;
+      ? `${window.location.origin}/pet/${qrSlug}`
+      : `https://dijitalpati.com/pet/${qrSlug}`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12">
@@ -369,7 +402,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
               <CardContent>
                 <div className="w-full" style={{ aspectRatio: "1", minHeight: "400px" }}>
                   <PetQrCard
-                    petId={id}
+                    petId={qrSlug}
                     petImage={displayData.image}
                     petUrl={petUrl}
                     isLost={displayData.isLost}
@@ -519,6 +552,14 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
           </div>
         </div>
       </div>
+
+      <ReportLostLocationDialog
+        open={lostDialogOpen}
+        onOpenChange={setLostDialogOpen}
+        petName={getPetName()}
+        loading={toggling}
+        onConfirm={handleConfirmLostReport}
+      />
     </div>
   );
 }

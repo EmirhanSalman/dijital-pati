@@ -1,20 +1,21 @@
 import { ScrollView, View, Text, Pressable, StyleSheet, Image, Alert, RefreshControl } from 'react-native';
 import { MotiView } from 'moti';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
+import { getPetLostLabel } from '../../../lib/pet-status';
+import { formatPetLocationDisplay } from '../../../lib/pet-location';
 
-// ─── Web-Extracted Brand Colors ───────────────────────────────────
 const BRAND = {
-  primary: '#6366F1',       // Indigo-500 (web scrollbar/accent)
-  primaryBg: '#EEF2FF',     // Indigo-50
-  primaryMid: '#C7D2FE',    // Indigo-200
-  navy: '#1A2744',          // Web --primary
-  background: '#F8FAFC',    // Slate-50 (web --background equivalent)
+  primary: '#6366F1',
+  primaryBg: '#EEF2FF',
+  primaryMid: '#C7D2FE',
+  navy: '#1A2744',
+  background: '#F8FAFC',
   surface: '#FFFFFF',
-  foreground: '#090E1A',    // Web --foreground
-  muted: '#64748B',         // Web --muted-foreground (slate-500)
-  border: '#E2E8F0',        // Web --border
+  foreground: '#090E1A',
+  muted: '#64748B',
+  border: '#E2E8F0',
   danger: '#EF4444',
   dangerBg: '#FEF2F2',
 };
@@ -24,14 +25,24 @@ export default function LostPetsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
-  async function fetchPets() {
-    const { data } = await supabase.from('pets').select('*');
-    if (data) setPets(data);
-  }
+  const fetchPets = useCallback(async () => {
+    const { data } = await supabase
+      .from('pets')
+      .select('*')
+      .eq('is_lost', true)
+      .order('lost_reported_at', { ascending: false, nullsFirst: false });
+    setPets(data ?? []);
+  }, []);
 
   useEffect(() => {
     fetchPets();
-  }, []);
+  }, [fetchPets]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchPets();
+    }, [fetchPets])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -65,6 +76,14 @@ export default function LostPetsScreen() {
         <Text style={styles.bannerSub}>Bölgenizdeki kayıp hayvanlar</Text>
       </MotiView>
 
+      {pets.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyEmoji}>🐾</Text>
+          <Text style={styles.emptyTitle}>Kayıp ilan yok</Text>
+          <Text style={styles.emptySub}>Şu an aktif kayıp ilanı bulunmuyor.</Text>
+        </View>
+      ) : null}
+
       {pets.map((pet, i) => (
         <MotiView
           key={pet.id || i}
@@ -75,7 +94,6 @@ export default function LostPetsScreen() {
           <Pressable
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             onPress={() => {
-              console.log('Navigating to pet detail:', pet.id);
               router.push({
                 pathname: '/lost-pets/[id]',
                 params: { id: String(pet.id), from: 'list' },
@@ -85,7 +103,10 @@ export default function LostPetsScreen() {
             <View style={styles.cardLeft}>
               <View style={styles.emojiCircle}>
                 {pet.image_url ? (
-                  <Image source={{ uri: pet.image_url.replace('ipfs://', 'https://ipfs.io/ipfs/') }} style={styles.petImage} />
+                  <Image
+                    source={{ uri: pet.image_url.replace('ipfs://', 'https://ipfs.io/ipfs/') }}
+                    style={styles.petImage}
+                  />
                 ) : (
                   <Text style={styles.emoji}>🐾</Text>
                 )}
@@ -93,13 +114,15 @@ export default function LostPetsScreen() {
             </View>
             <View style={styles.cardBody}>
               <Text style={styles.petName}>{pet.name}</Text>
-              <Text style={styles.petSpecies}>{pet.breed}</Text>
-              <Text style={styles.petLocation}>📍 Bilinmiyor</Text>
+              <Text style={styles.petSpecies}>{pet.breed || pet.species || '—'}</Text>
+              <Text style={styles.petLocation} numberOfLines={1}>
+                📍 {formatPetLocationDisplay(pet)}
+              </Text>
             </View>
             <View style={styles.cardRight}>
               <Text style={styles.date}>Yakın zamanda</Text>
               <View style={styles.urgentBadge}>
-                <Text style={styles.urgentText}>{pet.status || 'Kayıp'}</Text>
+                <Text style={styles.urgentText}>{getPetLostLabel(pet)}</Text>
               </View>
             </View>
           </Pressable>
@@ -109,8 +132,7 @@ export default function LostPetsScreen() {
       <Pressable
         style={({ pressed }) => [styles.addBtn, pressed && styles.addBtnPressed]}
         onPress={() => {
-          console.log('New lost pet listing pressed');
-          Alert.alert('Yeni İlan', 'Yeni kayıp hayvan ilanı oluşturma ekranı açılıyor...');
+          Alert.alert('Yeni İlan', 'Kayıp ilanı web üzerinden veya yakında mobilde oluşturulabilir.');
         }}
       >
         <Text style={styles.addBtnText}>+ Yeni İlan Ver</Text>
@@ -130,6 +152,10 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 4 },
   bannerSub: { fontSize: 14, color: BRAND.primaryMid },
+  empty: { alignItems: 'center', paddingVertical: 32, marginBottom: 16 },
+  emptyEmoji: { fontSize: 48, marginBottom: 12 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: BRAND.navy, marginBottom: 6 },
+  emptySub: { fontSize: 14, color: BRAND.muted, textAlign: 'center' },
   card: {
     backgroundColor: BRAND.surface,
     borderRadius: 14,

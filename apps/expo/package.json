@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
-    "start": "set EXPO_USE_METRO_WORKSPACE_ROOT=1 && set NODE_OPTIONS=--max_old_space_size=4096 && expo start",
-    "tunnel": "set EXPO_USE_METRO_WORKSPACE_ROOT=1 && set NODE_OPTIONS=--max_old_space_size=4096 && expo start --tunnel",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "set NODE_OPTIONS=--max_old_space_size=4096 && expo start",
+    "tunnel": "set NODE_OPTIONS=--max_old_space_size=4096 && expo start --tunnel",
+    "android": "set NODE_OPTIONS=--max_old_space_size=4096 && expo start --android",
+    "ios": "set NODE_OPTIONS=--max_old_space_size=4096 && expo start --ios",
+    "web": "set NODE_OPTIONS=--max_old_space_size=4096 && expo start --web"
   },
   "dependencies": {
     "@expo/metro-config": "~54.0.0",

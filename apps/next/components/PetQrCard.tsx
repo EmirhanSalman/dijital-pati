@@ -7,6 +7,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { AlertTriangle, CheckCircle } from "lucide-react";
 
 interface PetQrCardProps {
+  /** Public QR slug — must be pets.token_id, NOT pets.id */
   petId?: string | number;
   petImage?: string;
   petUrl?: string;
@@ -25,7 +26,7 @@ export default function PetQrCard({
 }: PetQrCardProps) {
   const [isFlipped, setIsFlipped] = useState(false);
   
-  // Generate the URL for QR code
+  // Canonical: https://dijitalpati.com/pet/{token_id} — never use pets.id here
   const qrUrl = petUrl || `https://dijitalpati.com/pet/${petId}`;
 
   return (

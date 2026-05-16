@@ -20,6 +20,12 @@ export function logScan(message: string, payload?: unknown) {
   devLog(SCAN_TAG, message, payload);
 }
 
+/** Single-line scanner log (exact prefix for Metro filtering) */
+export function logScannerLine(message: string) {
+  if (!__DEV__) return;
+  console.log(`${SCAN_TAG} ${message}`);
+}
+
 /** Stable key for map fitToCoordinates — avoids refitting every render. */
 export function coordinatesFitKey(coords: { latitude: number; longitude: number }[]): string {
   if (coords.length === 0) return '';

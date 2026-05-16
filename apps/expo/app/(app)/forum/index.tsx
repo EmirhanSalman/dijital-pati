@@ -80,7 +80,12 @@ export default function ForumScreen() {
         >
           <Pressable
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-            onPress={() => {}}
+            onPress={() => {
+              router.push({
+                pathname: '/forum/[id]',
+                params: { id: String(t.id) },
+              });
+            }}
           >
             <View style={styles.cardTop}>
               <Text style={styles.threadEmoji}>💬</Text>

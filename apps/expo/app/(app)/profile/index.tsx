@@ -46,7 +46,7 @@ type ProfileRow = {
 const ACTIONS: ProfileAction[] = [
   { emoji: '✏️', label: 'Profili Düzenle', description: 'Ad, soyad ve bilgileri güncelle', comingSoon: true },
   { emoji: '🔒', label: 'Gizlilik', description: 'Hesap güvenlik ayarları', comingSoon: true },
-  { emoji: '🔔', label: 'Bildirimler', description: 'Hatırlatma ve uyarı tercihleri', route: '/(app)/notifications' },
+  { emoji: '🔔', label: 'Bildirim Ayarları', description: 'Push ve hatırlatma tercihleri', route: '/(app)/settings' },
   { emoji: '🐾', label: 'Evcil Hayvanlarım', description: 'Kayıtlı evcil hayvanlarınız', comingSoon: true },
   { emoji: '❓', label: 'Destek', description: 'Yardım merkezi ve SSS', comingSoon: true },
 ];

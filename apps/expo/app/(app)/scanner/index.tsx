@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,18 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, ScanLine } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
-import { parsePetIdFromQr } from '../../../lib/qr';
-import { logScan } from '../../../lib/map-debug';
+import { parseQrPayload } from '../../../lib/qr';
+import { resolvePetByQrIdentifier } from '../../../lib/pet-qr-resolve';
+import { runQrRegressionFixtures } from '../../../lib/pet-qr-resolve.logic';
+import {
+  checkMemoryCooldown,
+  checkRecentPetScan,
+} from '../../../lib/scanner-dedup';
+import { logScan, logScannerLine } from '../../../lib/map-debug';
 
 const BRAND = {
   primary: '#6366F1',
@@ -22,55 +28,166 @@ const BRAND = {
   surface: '#FFFFFF',
   muted: '#64748B',
   success: '#22C55E',
+  successBg: '#F0FDF4',
 };
-
-async function resolvePetDbId(identifier: string): Promise<number | null> {
-  const asNumber = Number(identifier);
-  if (Number.isFinite(asNumber)) {
-    const { data } = await supabase.from('pets').select('id').eq('id', asNumber).maybeSingle();
-    if (data?.id != null) return Number(data.id);
-  }
-
-  const { data: byToken } = await supabase
-    .from('pets')
-    .select('id')
-    .eq('token_id', identifier)
-    .maybeSingle();
-  if (byToken?.id != null) return Number(byToken.id);
-
-  const { data: byId } = await supabase.from('pets').select('id').eq('id', identifier).maybeSingle();
-  if (byId?.id != null) return Number(byId.id);
-
-  return null;
-}
 
 export default function ScannerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [processing, setProcessing] = useState(false);
-  const scanLock = useRef(false);
+  const [scanCompleted, setScanCompleted] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+
+  const isMountedRef = useRef(true);
+  const isFocusedRef = useRef(false);
+  const isProcessingScanRef = useRef(false);
+  const scanCompletedRef = useRef(false);
+  const lastScannedValueRef = useRef<string | null>(null);
+  const lastScanTimeRef = useRef<number | null>(null);
+  const unlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearUnlockTimer = useCallback(() => {
+    if (unlockTimerRef.current) {
+      clearTimeout(unlockTimerRef.current);
+      unlockTimerRef.current = null;
+    }
+  }, []);
+
+  const resetScanSession = useCallback(
+    (reason: string) => {
+      clearUnlockTimer();
+      isProcessingScanRef.current = false;
+      scanCompletedRef.current = false;
+      if (isMountedRef.current) {
+        setProcessing(false);
+        setScanCompleted(false);
+      }
+      logScannerLine(`scan session reset (${reason})`);
+    },
+    [clearUnlockTimer]
+  );
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      clearUnlockTimer();
+      isFocusedRef.current = false;
+      isProcessingScanRef.current = false;
+      logScannerLine('scanner unmounted — camera released');
+    };
+  }, [clearUnlockTimer]);
+
+  useFocusEffect(
+    useCallback(() => {
+      isFocusedRef.current = true;
+      if (isMountedRef.current) setIsFocused(true);
+      logScannerLine('scanner focused — camera may activate');
+
+      resetScanSession('screen focused');
+
+      return () => {
+        isFocusedRef.current = false;
+        isProcessingScanRef.current = true;
+        if (isMountedRef.current) {
+          setIsFocused(false);
+          setProcessing(false);
+        }
+        clearUnlockTimer();
+        logScannerLine('scanner unfocused — Kamera kapatıldı, tarama devre dışı');
+      };
+    }, [resetScanSession, clearUnlockTimer])
+  );
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const { ok, failures } = runQrRegressionFixtures();
+    if (ok) {
+      logScannerLine('QR regression fixtures: OK (Rıfkı /pet/6 → id=1 token_id)');
+    } else {
+      logScan('QR regression fixtures FAILED', failures);
+    }
+  }, []);
 
   const handleBack = () => {
+    isFocusedRef.current = false;
     if (router.canGoBack()) router.back();
     else router.replace('/(app)/home');
   };
 
+  const handleScanAgain = () => {
+    resetScanSession('Tekrar okut');
+  };
+
+  const safeSetProcessing = useCallback((value: boolean) => {
+    if (isMountedRef.current) setProcessing(value);
+  }, []);
+
+  const finishWithError = useCallback(() => {
+    isProcessingScanRef.current = false;
+    lastScannedValueRef.current = null;
+    lastScanTimeRef.current = null;
+    safeSetProcessing(false);
+    unlockTimerRef.current = setTimeout(() => {
+      if (!isFocusedRef.current || scanCompletedRef.current) return;
+      isProcessingScanRef.current = false;
+    }, 800);
+  }, [safeSetProcessing]);
+
   const handleBarcodeScanned = useCallback(
     async ({ data }: { data: string }) => {
-      if (scanLock.current || processing) return;
-
-      const identifier = parsePetIdFromQr(data);
-      if (!identifier) {
-        Alert.alert('Geçersiz QR', 'Bu kod DijitalPati künyesi değil.');
+      if (!isFocusedRef.current) {
+        logScannerLine('scan ignored: screen not focused');
         return;
       }
 
-      scanLock.current = true;
-      setProcessing(true);
-      logScan('QR scanned', { identifier });
+      if (scanCompletedRef.current) {
+        logScannerLine('scan ignored: scan already completed');
+        return;
+      }
+
+      if (isProcessingScanRef.current) {
+        logScannerLine('scan ignored: already processing');
+        return;
+      }
+
+      const parsed = parseQrPayload(data);
+      const identifier = parsed.normalized;
+
+      if (!identifier) {
+        return;
+      }
+
+      const memoryCheck = checkMemoryCooldown(
+        identifier,
+        lastScannedValueRef.current,
+        lastScanTimeRef.current
+      );
+      if (memoryCheck === 'cooldown') {
+        logScannerLine('scan ignored: same QR cooldown (in-memory)');
+        return;
+      }
+
+      isProcessingScanRef.current = true;
+      lastScannedValueRef.current = identifier;
+      lastScanTimeRef.current = Date.now();
+      safeSetProcessing(true);
+      clearUnlockTimer();
+
+      logScannerLine(`QR raw data: ${parsed.raw}`);
+      if (parsed.urlPath != null) {
+        logScannerLine(`parsed URL path: /pet/${parsed.urlPath}`);
+      }
+      logScannerLine(`parsed identifier: ${parsed.identifier ?? '(invalid)'}`);
+      logScannerLine(`normalized identifier: ${identifier}`);
 
       try {
+        if (!isFocusedRef.current || !isMountedRef.current) {
+          logScannerLine('scan aborted: lost focus during start');
+          return;
+        }
+
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -78,17 +195,33 @@ export default function ScannerScreen() {
         if (!session) {
           logScan('insert blocked: no auth session');
           Alert.alert('Giriş gerekli', 'QR taraması kaydetmek için giriş yapmalısınız.');
+          finishWithError();
           return;
         }
 
-        const petDbId = await resolvePetDbId(identifier);
-        if (petDbId == null) {
-          logScan('pet not found for identifier', identifier);
+        const resolved = await resolvePetByQrIdentifier(identifier);
+        if (resolved == null) {
           Alert.alert('Kayıt bulunamadı', 'QR koduna ait evcil hayvan bulunamadı.');
+          finishWithError();
           return;
         }
 
-        logScan('resolved pet id (BIGINT)', petDbId);
+        if (!isFocusedRef.current || !isMountedRef.current) {
+          logScannerLine('scan aborted: lost focus after resolve');
+          return;
+        }
+
+        const petDbId = resolved.id;
+
+        if (
+          __DEV__ &&
+          resolved.method === 'legacy_id' &&
+          String(petDbId) === identifier
+        ) {
+          logScannerLine(
+            '⚠️ WRONG RESOLVE? legacy_id and pets.id equals QR slug — expected token_id for /pet/{token_id} URLs'
+          );
+        }
 
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
@@ -97,6 +230,7 @@ export default function ScannerScreen() {
             'Konum gerekli',
             'Görülme konumunu kaydetmek için konum izni vermeniz gerekiyor.'
           );
+          finishWithError();
           return;
         }
 
@@ -109,11 +243,30 @@ export default function ScannerScreen() {
         if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
           logScan('invalid GPS coords', { latitude, longitude });
           Alert.alert('Konum hatası', 'GPS koordinatları alınamadı. Lütfen tekrar deneyin.');
+          finishWithError();
+          return;
+        }
+
+        if (!isFocusedRef.current || !isMountedRef.current) {
+          logScannerLine('scan aborted: lost focus before insert');
+          return;
+        }
+
+        const dbDup = await checkRecentPetScan(petDbId, latitude, longitude);
+        if (dbDup === 'duplicate') {
+          logScannerLine('duplicate scan skipped (recent pet_scans row)');
+          Alert.alert('Bilgi', 'Konum zaten kaydedildi.');
+          scanCompletedRef.current = true;
+          if (isMountedRef.current) setScanCompleted(true);
+          safeSetProcessing(false);
+          isProcessingScanRef.current = true;
           return;
         }
 
         const scannedAt = new Date().toISOString();
-        logScan('inserting pet_scan', { pet_id: petDbId, latitude, longitude, scanned_at: scannedAt });
+        logScannerLine(`inserting pet_scan for pet_id: ${petDbId}`);
+        logScannerLine(`pet name: ${resolved.name ?? '(null)'}`);
+        logScannerLine(`token_id: ${resolved.token_id ?? '(null)'}`);
 
         const { data: inserted, error } = await supabase
           .from('pet_scans')
@@ -128,7 +281,8 @@ export default function ScannerScreen() {
 
         if (error) {
           logScan('pet_scans insert error', error);
-          const rlsHint = error.code === '42501' || error.message?.toLowerCase().includes('policy');
+          const rlsHint =
+            error.code === '42501' || error.message?.toLowerCase().includes('policy');
           Alert.alert(
             'Kayıt hatası',
             rlsHint
@@ -137,41 +291,56 @@ export default function ScannerScreen() {
                 ? 'pet_scans tablosu bulunamadı. create_pet_scans_table.sql migrasyonunu çalıştırın.'
                 : `Konum kaydedilemedi: ${error.message}`
           );
+          finishWithError();
           return;
         }
 
+        logScannerLine('scan inserted successfully');
         logScan('pet_scans insert success', inserted);
+
+        scanCompletedRef.current = true;
+        isProcessingScanRef.current = true;
+        if (isMountedRef.current) {
+          setScanCompleted(true);
+          setProcessing(false);
+        }
 
         Alert.alert('Başarılı', 'Görülme konumu kaydedildi. Haritada yeşil pin olarak görünecek.', [
           {
             text: 'Haritada gör',
-            onPress: () =>
+            onPress: () => {
+              isFocusedRef.current = false;
               router.push({
                 pathname: '/(app)/map',
                 params: { selectPetId: String(petDbId) },
-              }),
+              });
+            },
           },
           {
             text: 'Detay',
-            onPress: () =>
+            onPress: () => {
+              isFocusedRef.current = false;
               router.push({
                 pathname: '/lost-pets/[id]',
                 params: { id: String(petDbId), from: 'scanner' },
-              }),
+              });
+            },
           },
+          { text: 'Tamam', style: 'cancel' },
         ]);
       } catch (err) {
         logScan('unexpected scan error', err);
         Alert.alert('Hata', 'Tarama sırasında beklenmeyen bir hata oluştu.');
-      } finally {
-        setProcessing(false);
-        setTimeout(() => {
-          scanLock.current = false;
-        }, 2500);
+        finishWithError();
       }
     },
-    [processing, router]
+    [router, safeSetProcessing, finishWithError, clearUnlockTimer]
   );
+
+  const cameraActive =
+    isFocused && permission?.granted === true && !scanCompleted && !processing;
+
+  const onBarcodeHandler = cameraActive ? handleBarcodeScanned : undefined;
 
   if (!permission) {
     return (
@@ -198,14 +367,38 @@ export default function ScannerScreen() {
     );
   }
 
+  if (scanCompleted) {
+    return (
+      <View style={[styles.centered, styles.successScreen, { paddingTop: insets.top }]}>
+        <Text style={styles.successEmoji}>✅</Text>
+        <Text style={styles.successTitle}>Konum kaydedildi</Text>
+        <Text style={styles.successBody}>Kamera kapatıldı. Haritada yeşil pin görünecek.</Text>
+        <Pressable style={styles.primaryBtn} onPress={handleScanAgain}>
+          <Text style={styles.primaryBtnText}>Tekrar okut</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryBtn} onPress={handleBack}>
+          <Text style={styles.secondaryBtnText}>Geri Dön</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.screen}>
-      <CameraView
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-        onBarcodeScanned={processing ? undefined : handleBarcodeScanned}
-      />
+      {cameraActive ? (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={onBarcodeHandler}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]}>
+          {!isFocused ? (
+            <Text style={styles.placeholderText}>Kamera kapatıldı.</Text>
+          ) : null}
+        </View>
+      )}
 
       <View style={[styles.overlay, { paddingTop: insets.top + 8 }]}>
         <Pressable
@@ -220,13 +413,15 @@ export default function ScannerScreen() {
         <View style={styles.scanFrame}>
           <ScanLine color="#FFFFFF" size={28} strokeWidth={2} style={styles.scanIcon} />
         </View>
-        <Text style={styles.hint}>DijitalPati künyesini çerçeveye hizalayın</Text>
+        <Text style={styles.hint}>
+          {cameraActive ? 'DijitalPati künyesini çerçeveye hizalayın' : 'Kamera hazırlanıyor...'}
+        </Text>
       </View>
 
       {processing && (
         <View style={styles.processingOverlay}>
           <ActivityIndicator size="large" color="#FFFFFF" />
-          <Text style={styles.processingText}>Konum kaydediliyor...</Text>
+          <Text style={styles.processingText}>QR kod işleniyor...</Text>
         </View>
       )}
     </View>
@@ -241,6 +436,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  successScreen: { paddingHorizontal: 28 },
+  successEmoji: { fontSize: 56, marginBottom: 16 },
+  successTitle: { fontSize: 22, fontWeight: '800', color: BRAND.navy, marginBottom: 8 },
+  successBody: {
+    fontSize: 15,
+    color: BRAND.muted,
+    textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 22,
+  },
+  cameraPlaceholder: {
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: { color: '#94a3b8', fontSize: 15 },
   overlay: { position: 'absolute', top: 0, left: 16, zIndex: 10 },
   backButton: {
     width: 44,
@@ -281,6 +492,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+    zIndex: 20,
   },
   processingText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   permissionTitle: {
@@ -303,6 +515,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     marginBottom: 12,
+    minWidth: 200,
+    alignItems: 'center',
   },
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   secondaryBtn: { padding: 12 },

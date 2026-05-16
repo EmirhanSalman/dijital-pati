@@ -1,6 +1,7 @@
-import { ScrollView, View, Text, Pressable, StyleSheet, Image, Alert, RefreshControl } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, Image, RefreshControl } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 
 // ─── Web-Extracted Brand Colors ───────────────────────────────────
@@ -17,6 +18,7 @@ const BRAND = {
 };
 
 export default function NewsScreen() {
+  const router = useRouter();
   const [news, setNews] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -71,8 +73,10 @@ export default function NewsScreen() {
           <Pressable
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             onPress={() => {
-              console.log('News item pressed:', item.id, item.title);
-              Alert.alert('Haber Detayı', `"${item.title}" haberine gidiliyor...`);
+              router.push({
+                pathname: '/news/[id]',
+                params: { id: String(item.id) },
+              });
             }}
           >
             <View style={[styles.colorBar, { backgroundColor: BRAND.primary }]} />

@@ -31,6 +31,16 @@ export type PetLike = {
   location_lng?: unknown;
 };
 
+/** Public lost-pet map visibility — `pets.is_lost` column only. */
+export type PetLostLike = {
+  is_lost?: boolean | null;
+};
+
+/** Show on map only when `pets.is_lost` is explicitly true. */
+export function isLostPet(pet: PetLostLike): boolean {
+  return pet.is_lost === true;
+}
+
 export function parseCoordinate(value: unknown): number | null {
   if (value == null || value === '') return null;
   const n = typeof value === 'string' ? parseFloat(value.trim()) : Number(value);
@@ -92,7 +102,37 @@ export function filterValidLatLng(coords: LatLng[]): LatLng[] {
   return coords.filter(isValidLatLng);
 }
 
-/** Removes consecutive duplicate/near-duplicate points (avoids polyline / fit crashes). */
+/**
+ * Paw trail: pet canonical position → scan points (chronological).
+ * Returns [] when there are no scans (no one-point “trail”).
+ */
+export function buildPawTrailCoordinates(
+  pet: Pick<Coordinates, 'latitude' | 'longitude'> | null,
+  scans: LatLng[]
+): LatLng[] {
+  if (!pet || scans.length === 0) return [];
+
+  const petCoord = { latitude: pet.latitude, longitude: pet.longitude };
+  if (!isValidLatLng(petCoord)) return [];
+
+  const raw: LatLng[] = [petCoord, ...filterValidLatLng(scans)];
+  if (raw.length < 2) return [];
+
+  return dedupeConsecutiveCoords(raw);
+}
+
+/** Valid scan rows for one pet, matched by stringified id (pet_scans.pet_id is BIGINT). */
+export function filterScansForPetId<
+  T extends { pet_id: string | number; latitude: number; longitude: number; scanned_at: string },
+>(scans: T[], petId: string | number | null | undefined): T[] {
+  if (petId == null || petId === '') return [];
+
+  return scans
+    .filter((scan) => samePetId(scan.pet_id, petId))
+    .filter((scan) => isValidLatLng({ latitude: scan.latitude, longitude: scan.longitude }))
+    .sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
+}
+
 export function dedupeConsecutiveCoords(coords: LatLng[], epsilon = 0.00005): LatLng[] {
   const valid = filterValidLatLng(coords);
   if (valid.length === 0) return [];
@@ -152,7 +192,7 @@ export function buildMapPetMarkers<T extends PetLike>(pets: T[]): MapPetMarker<T
   const result: MapPetMarker<T>[] = [];
 
   for (const group of buckets.values()) {
-    const sorted = [...group].sort((a, b) => Number(a.id) - Number(b.id));
+    const sorted = [...group].sort((a, b) => String(a.id).localeCompare(String(b.id)));
 
     if (sorted.length === 1) {
       result.push(sorted[0]);
@@ -179,6 +219,27 @@ export function samePetId(
   b: string | number | null | undefined
 ): boolean {
   return String(a ?? '') === String(b ?? '');
+}
+
+/** Lost + valid coordinates — eligible for map pins. */
+export function isMapEligibleLostPet(pet: PetLostLike & PetLike): boolean {
+  return isLostPet(pet) && getPetMapCoordinate(pet) != null;
+}
+
+export function findMapPetById<T extends PetLike>(
+  mapPets: MapPetMarker<T>[],
+  petId: string | number | null | undefined
+): MapPetMarker<T> | null {
+  if (petId == null || petId === '') return null;
+  return mapPets.find((p) => samePetId(p.id, petId)) ?? null;
+}
+
+/** After fetch: selection is valid only if pet is on mapPets (lost + coords). */
+export function isSelectionValidOnMap(
+  mapPets: MapPetMarker[],
+  petId: string | number | null | undefined
+): boolean {
+  return findMapPetById(mapPets, petId) != null;
 }
 
 export { ISPARTA_CENTER };

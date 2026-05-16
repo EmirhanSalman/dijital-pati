@@ -1,8 +1,10 @@
-import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { MotiView } from 'moti';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../_layout';
 
-// ─── Web-Extracted Brand Colors ───────────────────────────────────
 const BRAND = {
   primary:     '#6366F1',
   primaryDark: '#4F46E5',
@@ -18,13 +20,6 @@ const BRAND = {
   info:        '#3B82F6',
 };
 
-const CARDS = [
-  { emoji: '🐾', label: 'Toplam Hayvan', value: '0', color: BRAND.primary },
-  { emoji: '✅', label: 'Aktif Görevler', value: '0', color: BRAND.success },
-  { emoji: '🔔', label: 'Son Uyarılar',  value: '0', color: BRAND.danger  },
-  { emoji: '💉', label: 'Yaklaşan Aşı',  value: '-', color: BRAND.info, comingSoon: true },
-];
-
 const QUICK_ACTIONS = [
   { emoji: '🔍', label: 'Kayıp İlanları', description: 'Kayıp & bulunan hayvanlar', route: '/(app)/lost-pets', color: BRAND.primary },
   { emoji: '📷', label: 'QR Okut',        description: 'Künye tara, konum kaydet',   route: '/(app)/scanner', color: BRAND.success },
@@ -35,15 +30,92 @@ const QUICK_ACTIONS = [
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { session } = useAuth();
+  const [myPetCount, setMyPetCount] = useState<number | null>(null);
+  const [lostCount, setLostCount] = useState<number | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    setStatsError(null);
+
+    const userId = session?.user?.id;
+    if (!userId) {
+      setMyPetCount(0);
+      setLostCount(0);
+      setStatsLoading(false);
+      return;
+    }
+
+    const [mine, lost] = await Promise.all([
+      supabase
+        .from('pets')
+        .select('id', { count: 'exact', head: true })
+        .eq('owner_id', userId),
+      supabase
+        .from('pets')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_lost', true),
+    ]);
+
+    if (mine.error || lost.error) {
+      setStatsError('İstatistikler yüklenemedi.');
+      setMyPetCount(null);
+      setLostCount(null);
+    } else {
+      setMyPetCount(mine.count ?? 0);
+      setLostCount(lost.count ?? 0);
+    }
+    setStatsLoading(false);
+  }, [session?.user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats])
+  );
+
+  const cards = [
+    {
+      emoji: '🐾',
+      label: 'Toplam Hayvanım',
+      value: statsLoading ? '…' : statsError ? '—' : String(myPetCount ?? 0),
+      color: BRAND.primary,
+    },
+    {
+      emoji: '🔍',
+      label: 'Kayıp İlanları',
+      value: statsLoading ? '…' : statsError ? '—' : String(lostCount ?? 0),
+      color: BRAND.danger,
+    },
+    {
+      emoji: '✅',
+      label: 'Aktif Görevler',
+      value: '0',
+      color: BRAND.success,
+      comingSoon: true,
+    },
+    {
+      emoji: '💉',
+      label: 'Yaklaşan Aşı',
+      value: '-',
+      color: BRAND.info,
+      comingSoon: true,
+    },
+  ];
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <Text style={styles.greeting}>Merhaba 👋</Text>
       <Text style={styles.subtitle}>Bugün nelere bakacaksın?</Text>
 
-      {/* Summary Cards */}
+      {statsError ? (
+        <Text style={styles.statsError}>{statsError}</Text>
+      ) : null}
+
       <View style={styles.cardGrid}>
-        {CARDS.map((card, i) => (
+        {cards.map((card, i) => (
           <MotiView
             key={card.label}
             from={{ opacity: 0, translateY: 30 }}
@@ -55,21 +127,24 @@ export default function HomeScreen() {
               card.comingSoon && styles.disabledCard,
             ]}
           >
-            <Text style={styles.cardEmoji}>{card.emoji}</Text>
+            {statsLoading && !card.comingSoon ? (
+              <ActivityIndicator size="small" color={card.color} style={styles.cardLoader} />
+            ) : (
+              <Text style={styles.cardEmoji}>{card.emoji}</Text>
+            )}
             <Text style={[styles.cardValue, { color: card.comingSoon ? BRAND.muted : card.color }]}>
               {card.value}
             </Text>
             <Text style={styles.cardLabel}>{card.label}</Text>
-            {card.comingSoon && (
+            {card.comingSoon ? (
               <View style={styles.yakindaBadge}>
                 <Text style={styles.yakindaText}>Yakında</Text>
               </View>
-            )}
+            ) : null}
           </MotiView>
         ))}
       </View>
 
-      {/* Quick Actions */}
       <MotiView
         from={{ opacity: 0, translateY: 20 }}
         animate={{ opacity: 1, translateY: 0 }}
@@ -94,7 +169,6 @@ export default function HomeScreen() {
         ))}
       </MotiView>
 
-      {/* Recent Activity — empty state until real data is available */}
       <MotiView
         from={{ opacity: 0, translateY: 20 }}
         animate={{ opacity: 1, translateY: 0 }}
@@ -118,7 +192,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BRAND.background },
   container: { padding: 20, paddingBottom: 40 },
   greeting: { fontSize: 28, fontWeight: '800', color: BRAND.foreground, marginBottom: 4 },
-  subtitle: { fontSize: 16, color: BRAND.muted, marginBottom: 20 },
+  subtitle: { fontSize: 16, color: BRAND.muted, marginBottom: 12 },
+  statsError: { fontSize: 13, color: BRAND.danger, marginBottom: 8 },
   cardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 },
   summaryCard: {
     width: '47%',
@@ -134,8 +209,10 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
     position: 'relative',
+    minHeight: 110,
   },
   disabledCard: { opacity: 0.55 },
+  cardLoader: { marginBottom: 6, alignSelf: 'flex-start' },
   cardEmoji: { fontSize: 24, marginBottom: 6 },
   cardValue: { fontSize: 30, fontWeight: '800', marginBottom: 2 },
   cardLabel: { fontSize: 12, color: BRAND.muted },

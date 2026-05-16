@@ -8,6 +8,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
+import ReportLostLocationDialog from "@/components/ReportLostLocationDialog";
 
 export default function MyPetsPage() {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -15,6 +16,11 @@ export default function MyPetsPage() {
   const [error, setError] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [lostDialog, setLostDialog] = useState<{
+    open: boolean;
+    tokenId: string;
+    petName: string;
+  } | null>(null);
 
   useEffect(() => {
     checkAuthAndFetchPets();
@@ -63,34 +69,77 @@ export default function MyPetsPage() {
     }
   };
 
+  const postToggleLost = async (
+    tokenId: string,
+    isLost: boolean,
+    latitude?: number,
+    longitude?: number
+  ) => {
+    const response = await fetch("/api/pets/toggle-lost", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tokenId,
+        isLost,
+        ...(isLost ? { latitude, longitude } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Durum güncellenemedi.");
+    }
+  };
+
   const handleToggleLostStatus = async (tokenId: string, currentStatus: boolean) => {
+    const pet = pets.find((p) => p.token_id === tokenId);
+    const petName =
+      pet?.name?.trim() && !pet.name.startsWith("Pati #")
+        ? pet.name
+        : `Pati #${tokenId}`;
+
+    if (!currentStatus) {
+      setLostDialog({ open: true, tokenId, petName });
+      return;
+    }
+
     setToggling(tokenId);
     setError(null);
     try {
-      const response = await fetch("/api/pets/toggle-lost", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tokenId,
-          isLost: !currentStatus,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Durum güncellenemedi.");
-      }
-
-      // Update local state
+      await postToggleLost(tokenId, false);
       setPets((prevPets) =>
-        prevPets.map((pet) =>
-          pet.token_id === tokenId ? { ...pet, is_lost: !currentStatus } : pet
+        prevPets.map((p) =>
+          p.token_id === tokenId ? { ...p, is_lost: false } : p
         )
       );
-    } catch (err: any) {
-      setError(err.message || "Durum güncellenirken bir hata oluştu.");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Durum güncellenirken bir hata oluştu."
+      );
+    } finally {
+      setToggling(null);
+    }
+  };
+
+  const handleConfirmLostReport = async (latitude: number, longitude: number) => {
+    if (!lostDialog) return;
+    setToggling(lostDialog.tokenId);
+    setError(null);
+    try {
+      await postToggleLost(lostDialog.tokenId, true, latitude, longitude);
+      setPets((prevPets) =>
+        prevPets.map((p) =>
+          p.token_id === lostDialog.tokenId
+            ? { ...p, is_lost: true, latitude, longitude }
+            : p
+        )
+      );
+      setLostDialog(null);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Kayıp bildirimi oluşturulamadı."
+      );
+      throw err;
     } finally {
       setToggling(null);
     }
@@ -309,6 +358,18 @@ export default function MyPetsPage() {
           </>
         )}
       </div>
+
+      {lostDialog ? (
+        <ReportLostLocationDialog
+          open={lostDialog.open}
+          onOpenChange={(open) => {
+            if (!open) setLostDialog(null);
+          }}
+          petName={lostDialog.petName}
+          loading={toggling === lostDialog.tokenId}
+          onConfirm={handleConfirmLostReport}
+        />
+      ) : null}
     </div>
   );
 }

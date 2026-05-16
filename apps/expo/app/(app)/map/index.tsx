@@ -11,15 +11,20 @@ import {
 import MapView, { Marker, Circle, Callout, Polyline, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, MapPin, Search } from 'lucide-react-native';
+import { ArrowLeft, MapPin, RefreshCw, Search } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
 import { navigateScreenBack } from '../../../lib/navigation';
 import {
   buildMapPetMarkers,
+  buildPawTrailCoordinates,
+  filterScansForPetId,
+  findMapPetById,
+  getPetMapCoordinate,
+  isLostPet,
+  isSelectionValidOnMap,
   samePetId,
   ISPARTA_CENTER,
   filterValidLatLng,
-  dedupeConsecutiveCoords,
   isValidLatLng,
   type MapPetMarker,
   type PetLike,
@@ -27,9 +32,15 @@ import {
 } from '../../../lib/map-coords';
 import { coordinatesFitKey, logMap } from '../../../lib/map-debug';
 
+/** Map overlay layers — custom callouts stay off (native markers are stable). */
+const SHOW_CIRCLES = true;
+const SHOW_SCAN_MARKERS = true;
+const SHOW_POLYLINE = true;
+const SHOW_CUSTOM_MARKERS = false;
+
 type PetRecord = PetLike & {
   name?: string | null;
-  status?: string | null;
+  is_lost?: boolean | null;
 };
 
 type ScanMarker = {
@@ -55,8 +66,8 @@ const BRAND = {
 
 const SEARCH_RADIUS_METERS = 500;
 
-const CIRCLE_FILL = 'rgba(239, 68, 68, 0.06)';
-const CIRCLE_STROKE = 'rgba(220, 38, 38, 0.28)';
+const CIRCLE_FILL = 'rgba(239, 68, 68, 0.08)';
+const CIRCLE_STROKE = 'rgba(220, 38, 38, 0.35)';
 
 const DEFAULT_REGION: Region = {
   latitude: ISPARTA_CENTER.latitude,
@@ -65,8 +76,18 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 0.35,
 };
 
-/** Minimum region span when fitting a single point (avoids extreme zoom). */
 const MIN_REGION_DELTA = 0.06;
+
+/** Approximate floating header height (controls row + legend + gaps). */
+const CONTROLS_ROW_HEIGHT = 44;
+const LEGEND_ROW_HEIGHT = 36;
+const OVERLAY_VERTICAL_GAP = 10;
+
+/** Fixed z-index — do not change on selection (native maps can drop pins when zIndex changes). */
+const Z_PET_MARKER = 3;
+const Z_PET_CIRCLE = 1;
+const Z_SCAN_MARKER = 8;
+const Z_POLYLINE = 5;
 
 function normalizeScan(raw: Record<string, unknown>): ScanMarker | null {
   const lat = Number(raw.latitude);
@@ -131,28 +152,72 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const lastInitialFitKey = useRef('');
+  const didCompleteInitialFit = useRef(false);
+  const selectedPetIdRef = useRef<string | number | null>(null);
 
   const [pets, setPets] = useState<PetRecord[]>([]);
   const [scans, setScans] = useState<ScanMarker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [selectedPetId, setSelectedPetId] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const hasMapDataRef = useRef(false);
+
+  const topOverlayHeight = useMemo(() => {
+    const refreshLine = refreshing ? 18 : 0;
+    return (
+      insets.top +
+      8 +
+      CONTROLS_ROW_HEIGHT +
+      OVERLAY_VERTICAL_GAP +
+      LEGEND_ROW_HEIGHT +
+      OVERLAY_VERTICAL_GAP +
+      refreshLine +
+      12
+    );
+  }, [insets.top, refreshing]);
+
+  /** Keeps marker centers out from under the floating top controls. */
+  const mapPadding = useMemo(
+    () => ({
+      top: topOverlayHeight,
+      right: 16,
+      bottom: Math.max(insets.bottom, 24) + 20,
+      left: 16,
+    }),
+    [topOverlayHeight, insets.bottom]
+  );
 
   const mapEdgePadding = useMemo(
     () => ({
-      top: insets.top + 128,
+      top: topOverlayHeight + 32,
       right: 52,
       bottom: Math.max(insets.bottom, 24) + 56,
       left: 52,
     }),
-    [insets.top, insets.bottom]
+    [topOverlayHeight, insets.bottom]
   );
 
-  const fetchMapData = useCallback(async () => {
-    setLoading(true);
-    setFetchError(null);
-    logMap('fetchMapData: start');
+  selectedPetIdRef.current = selectedPetId;
+
+  const fetchMapData = useCallback(async (options?: { manual?: boolean }) => {
+    const manual = options?.manual === true;
+    const selectedBeforeFetch = selectedPetIdRef.current;
+
+    if (manual) {
+      setRefreshing(true);
+      setRefreshError(null);
+    } else if (!hasMapDataRef.current) {
+      setLoading(true);
+      setFetchError(null);
+    }
+
+    logMap('fetchMapData: start', {
+      manual,
+      selectedPetIdBeforeRefetch: selectedBeforeFetch,
+    });
 
     const [petsRes, scansRes] = await Promise.all([
       supabase.from('pets').select('*'),
@@ -162,159 +227,331 @@ export default function MapScreen() {
         .order('scanned_at', { ascending: true }),
     ]);
 
+    const petsOk = !petsRes.error && petsRes.data != null;
+    const scansOk = !scansRes.error && scansRes.data != null;
+
+    let nextPets: PetRecord[] | null = null;
+    let nextScans: ScanMarker[] | null = null;
+
     if (petsRes.error) {
       logMap('pets fetch error', petsRes.error);
-      setFetchError(petsRes.error.message);
+      if (manual) {
+        setRefreshError('Harita yenilenemedi.');
+      } else if (!hasMapDataRef.current) {
+        setFetchError(petsRes.error.message);
+      }
     } else if (petsRes.data) {
-      setPets(petsRes.data as PetRecord[]);
-      logMap(`pets fetched: ${petsRes.data.length}`);
+      nextPets = petsRes.data as PetRecord[];
+      logMap(`pets fetched: ${nextPets.length}`);
     }
 
     if (scansRes.error) {
       logMap('pet_scans fetch error', scansRes.error);
-      setFetchError((prev) => prev ?? scansRes.error!.message);
-      setScans([]);
+      if (manual) {
+        setRefreshError((prev) => prev ?? 'Veriler güncellenirken bir hata oluştu.');
+      } else if (!hasMapDataRef.current) {
+        setFetchError((prev) => prev ?? scansRes.error!.message);
+      }
     } else if (scansRes.data) {
       const normalized = scansRes.data
         .map((row) => normalizeScan(row as Record<string, unknown>))
         .filter((row): row is ScanMarker => row !== null);
-      const skipped = scansRes.data.length - normalized.length;
-      setScans(normalized);
+      nextScans = normalized;
       logMap(`pet_scans fetched: ${scansRes.data.length} raw, ${normalized.length} valid`, {
-        skippedInvalid: skipped,
+        skippedInvalid: scansRes.data.length - normalized.length,
       });
     }
 
+    const canCommitPets = petsOk && nextPets != null;
+    const canCommitScans = scansOk && nextScans != null;
+
+    if (manual) {
+      if (canCommitPets) setPets(nextPets);
+      if (canCommitScans) setScans(nextScans);
+      if (canCommitPets || canCommitScans) hasMapDataRef.current = true;
+      if (canCommitPets && canCommitScans) {
+        setRefreshError(null);
+        logMap('manual refresh: success');
+      }
+    } else {
+      if (canCommitPets) {
+        setPets(nextPets);
+        hasMapDataRef.current = true;
+      }
+      if (canCommitScans) {
+        setScans(nextScans);
+        hasMapDataRef.current = true;
+      } else if (scansRes.error && !hasMapDataRef.current) {
+        setScans([]);
+      }
+    }
+
     setLoading(false);
-    lastInitialFitKey.current = '';
-    logMap('fetchMapData: done');
+    setRefreshing(false);
+
+    if (canCommitPets && nextPets) {
+      const mapPetsAfterFetch = buildMapPetMarkers(nextPets.filter(isLostPet));
+      const lostCount = nextPets.filter(isLostPet).length;
+      const selectionStillValid = isSelectionValidOnMap(
+        mapPetsAfterFetch,
+        selectedBeforeFetch
+      );
+
+      logMap('fetchMapData: done', {
+        manual,
+        totalPets: nextPets.length,
+        lostPets: lostCount,
+        mapPets: mapPetsAfterFetch.length,
+        selectedPetIdBeforeRefetch: selectedBeforeFetch,
+        selectionStillValid,
+      });
+
+      if (selectedBeforeFetch != null && !selectionStillValid) {
+        setSelectedPetId(null);
+        logMap('cleared selectedPetId after fetch (not lost or no valid coordinate)', {
+          selectedPetId: selectedBeforeFetch,
+        });
+      }
+    } else {
+      logMap('fetchMapData: done (pets not committed)', { manual, petsOk, scansOk });
+    }
   }, []);
+
+  const handleRefresh = useCallback(() => {
+    if (refreshing || loading) return;
+    void fetchMapData({ manual: true });
+  }, [fetchMapData, refreshing, loading]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchMapData();
+      void fetchMapData();
     }, [fetchMapData])
   );
 
   useEffect(() => {
-    if (selectPetId) {
-      setSelectedPetId(selectPetId);
+    if (!selectPetId) return;
+    setSelectedPetId(selectPetId);
+    void fetchMapData();
+  }, [selectPetId, fetchMapData]);
+
+  /** Raw rows from Supabase. */
+  const allPets = pets;
+
+  /** `is_lost === true` only. */
+  const lostPets = useMemo(() => allPets.filter(isLostPet), [allPets]);
+
+  /** Lost pets with valid map coordinates (all pins, ignoring search). */
+  const mapPets = useMemo<MapPetMarker<PetRecord>[]>(
+    () => buildMapPetMarkers(lostPets),
+    [lostPets]
+  );
+
+  const mapPetIds = useMemo(
+    () => new Set(mapPets.map((pet) => String(pet.id))),
+    [mapPets]
+  );
+
+  useEffect(() => {
+    if (!__DEV__ || lostPets.length === 0) return;
+    const skipped = lostPets
+      .filter((pet) => !getPetMapCoordinate(pet))
+      .map((pet) => ({ petId: String(pet.id), name: pet.name, reason: 'invalid_coordinates' }));
+    if (skipped.length > 0) {
+      logMap('lost pets skipped (invalid coordinates)', { count: skipped.length, skipped });
     }
-  }, [selectPetId]);
+  }, [lostPets]);
 
-  const markers = useMemo<MapPetMarker<PetRecord>[]>(
-    () => buildMapPetMarkers(pets),
-    [pets]
-  );
-
-  const filteredMarkers = useMemo(() => {
+  /** Search-filtered subset of mapPets (display only — does not affect selection validity). */
+  const visiblePets = useMemo(() => {
+    const withValidDisplay = mapPets.filter((pet) =>
+      isValidLatLng({ latitude: pet.mapLatitude, longitude: pet.mapLongitude })
+    );
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return markers;
-    return markers.filter((pet) => (pet.name ?? '').toLowerCase().includes(q));
-  }, [markers, searchQuery]);
+    if (!q) return withValidDisplay;
+    return withValidDisplay.filter((pet) =>
+      (pet.name ?? '').toLowerCase().includes(q)
+    );
+  }, [mapPets, searchQuery]);
 
-  const petsMissingCoords = pets.length - markers.length;
-
-  const selectedPet = useMemo(
-    () => filteredMarkers.find((pet) => samePetId(pet.id, selectedPetId)) ?? null,
-    [filteredMarkers, selectedPetId]
+  const scansForMapLostPets = useMemo(
+    () => scans.filter((scan) => mapPetIds.has(String(scan.pet_id))),
+    [scans, mapPetIds]
   );
 
-  const selectedPetScans = useMemo(() => {
-    if (selectedPetId == null) return [];
-    return scans
-      .filter((scan) => samePetId(scan.pet_id, selectedPetId))
-      .sort((a, b) => new Date(a.scanned_at).getTime() - new Date(b.scanned_at).getTime());
-  }, [scans, selectedPetId]);
+  const petsMissingCoords = lostPets.length - mapPets.length;
 
-  /** Paw trail: canonical pet position → scans (chronological), validated & deduped */
-  const pawTrailCoordinates = useMemo(() => {
+  const visibleCirclePets = useMemo(
+    () =>
+      visiblePets.filter((pet) =>
+        isValidLatLng({ latitude: pet.latitude, longitude: pet.longitude })
+      ),
+    [visiblePets]
+  );
+
+  /** Selected pet from full mapPets — not from search-filtered visiblePets. */
+  const selectedPet = useMemo(
+    () => findMapPetById(mapPets, selectedPetId),
+    [mapPets, selectedPetId]
+  );
+
+  const isSelectedPetVisible = useMemo(() => {
+    if (!selectedPetId || !selectedPet) return false;
+    return visiblePets.some((pet) => samePetId(pet.id, selectedPetId));
+  }, [visiblePets, selectedPetId, selectedPet]);
+
+  const selectedScans = useMemo(() => {
     if (!selectedPet) return [];
+    return filterScansForPetId(scans, selectedPet.id);
+  }, [scans, selectedPet]);
 
-    const raw: LatLng[] = [
-      { latitude: selectedPet.latitude, longitude: selectedPet.longitude },
-      ...selectedPetScans.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
-    ];
+  /** Green pins / trail only when selected pet is on map and currently visible (not hidden by search). */
+  const showSelectionOverlays = isSelectedPetVisible && selectedPet != null;
 
-    return dedupeConsecutiveCoords(raw);
-  }, [selectedPet, selectedPetScans]);
+  const selectedPetScanCoords = useMemo(
+    () =>
+      selectedScans.map((s) => ({ latitude: s.latitude, longitude: s.longitude })),
+    [selectedScans]
+  );
 
-  const showPawTrail = pawTrailCoordinates.length >= 2;
+  const pawTrailCoordinates = useMemo(
+    () =>
+      showSelectionOverlays
+        ? buildPawTrailCoordinates(selectedPet, selectedPetScanCoords)
+        : [],
+    [showSelectionOverlays, selectedPet, selectedPetScanCoords]
+  );
 
-  const allVisibleCoordinates = useMemo<LatLng[]>(() => {
-    const petCoords = filteredMarkers.map(({ mapLatitude, mapLongitude }) => ({
+  const polylineCoords = useMemo(
+    () => filterValidLatLng(pawTrailCoordinates),
+    [pawTrailCoordinates]
+  );
+
+  const willRenderPolyline =
+    SHOW_POLYLINE &&
+    showSelectionOverlays &&
+    selectedScans.length > 0 &&
+    polylineCoords.length >= 2;
+
+  const visibleSelectedScans = useMemo(() => {
+    if (!SHOW_SCAN_MARKERS || !showSelectionOverlays) return [];
+    return selectedScans;
+  }, [selectedScans, showSelectionOverlays]);
+
+  /** Initial fit: all map pets + their scans (not search-filtered). */
+  const initialFitCoordinates = useMemo<LatLng[]>(() => {
+    const petCoords = mapPets.map(({ mapLatitude, mapLongitude }) => ({
       latitude: mapLatitude,
       longitude: mapLongitude,
     }));
-    const scanCoords = scans.map(({ latitude, longitude }) => ({ latitude, longitude }));
+    const scanCoords = scansForMapLostPets.map(({ latitude, longitude }) => ({
+      latitude,
+      longitude,
+    }));
     return filterValidLatLng([...petCoords, ...scanCoords]);
-  }, [filteredMarkers, scans]);
+  }, [mapPets, scansForMapLostPets]);
 
   const initialFitKey = useMemo(
-    () => coordinatesFitKey(allVisibleCoordinates),
-    [allVisibleCoordinates]
+    () => coordinatesFitKey(initialFitCoordinates),
+    [initialFitCoordinates]
   );
 
+  const searchActive = searchQuery.trim().length > 0;
+
   useEffect(() => {
+    if (!__DEV__) return;
     logMap('map state', {
-      visiblePets: filteredMarkers.length,
-      totalPets: pets.length,
-      skippedInvalidCoords: petsMissingCoords,
+      allPets: allPets.length,
+      lostPets: lostPets.length,
+      mapPets: mapPets.length,
+      visiblePets: visiblePets.length,
       selectedPetId,
-      selectedPetName: selectedPet?.name ?? null,
-      selectedCoord: selectedPet
-        ? {
-            latitude: selectedPet.latitude,
-            longitude: selectedPet.longitude,
-            source: selectedPet.coordSource,
-            usedFallback: selectedPet.coordSource === 'location_fallback',
-          }
-        : null,
-      selectedScanCount: selectedPetScans.length,
-      pawTrailPoints: pawTrailCoordinates.length,
+      isSelectedPetVisible,
+      selectedScanCount: selectedScans.length,
+      willRenderPolyline,
     });
   }, [
-    filteredMarkers.length,
-    pets.length,
-    petsMissingCoords,
+    allPets.length,
+    lostPets.length,
+    mapPets.length,
+    visiblePets.length,
     selectedPetId,
-    selectedPet,
-    selectedPetScans.length,
-    pawTrailCoordinates.length,
+    isSelectedPetVisible,
+    selectedScans.length,
+    willRenderPolyline,
   ]);
 
-  /** Initial load only — do NOT re-fit on marker selection (keeps all red pins visible). */
   useEffect(() => {
     if (loading) return;
+    if (didCompleteInitialFit.current) return;
+
+    if (initialFitCoordinates.length === 0) {
+      const emptyKey = 'no-lost-pets';
+      if (lastInitialFitKey.current === emptyKey) return;
+      try {
+        mapRef.current?.animateToRegion(DEFAULT_REGION, 0);
+        logMap('fit default region (no lost pets with coordinates)');
+      } catch (err) {
+        logMap('fit default region error', err);
+      }
+      lastInitialFitKey.current = emptyKey;
+      didCompleteInitialFit.current = true;
+      return;
+    }
+
     if (!initialFitKey || initialFitKey === lastInitialFitKey.current) return;
 
     safeFitMapToCoords(
       mapRef,
-      allVisibleCoordinates,
+      initialFitCoordinates,
       mapEdgePadding,
-      lastInitialFitKey.current !== '',
+      false,
       'initial-load'
     );
     lastInitialFitKey.current = initialFitKey;
-  }, [loading, initialFitKey, allVisibleCoordinates, mapEdgePadding]);
+    didCompleteInitialFit.current = true;
+  }, [loading, initialFitKey, initialFitCoordinates, mapEdgePadding]);
 
   const handleMarkerPress = useCallback(
     (petId: string | number) => {
       try {
-        const pet = filteredMarkers.find((p) => samePetId(p.id, petId));
+        const pet = visiblePets.find((p) => samePetId(p.id, petId));
+        const coord = pet ? getPetMapCoordinate(pet) : null;
+        const scansForPet = pet ? filterScansForPetId(scans, pet.id) : [];
+        const trail =
+          pet && scansForPet.length > 0
+            ? buildPawTrailCoordinates(
+                { latitude: pet.latitude, longitude: pet.longitude },
+                scansForPet.map((s) => ({ latitude: s.latitude, longitude: s.longitude }))
+              )
+            : [];
+        const trailValid = filterValidLatLng(trail);
+        const willLine =
+          SHOW_POLYLINE && scansForPet.length > 0 && trailValid.length >= 2;
+
         logMap('marker pressed', {
-          petId,
-          name: pet?.name,
-          canonical: pet
-            ? { latitude: pet.latitude, longitude: pet.longitude, source: pet.coordSource }
-            : null,
+          pressedPetId: petId,
+          pressedPetIdNormalized: String(petId),
+          pressedPetName: pet?.name ?? null,
+          isLostPet: pet ? isLostPet(pet) : false,
+          coordinate: coord,
+          hasValidCoordinate: coord != null,
+          selectedScanCount: scansForPet.length,
+          validScanCount: scansForPet.length,
+          willRenderPolyline: willLine,
+          polylinePointCount: willLine ? trailValid.length : 0,
         });
-        setSelectedPetId(petId);
+
+        if (!pet || !coord) {
+          logMap('marker press ignored: pet not on map or invalid coordinate', { petId });
+          return;
+        }
+
+        setSelectedPetId(pet.id);
       } catch (err) {
         logMap('marker press error', err);
       }
     },
-    [filteredMarkers]
+    [visiblePets, scans]
   );
 
   const handleBack = () => {
@@ -327,154 +564,197 @@ export default function MapScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFill}
         initialRegion={DEFAULT_REGION}
+        mapPadding={mapPadding}
         showsUserLocation
         showsMyLocationButton={Platform.OS === 'android'}
       >
-        {/* All red pets — never filtered by selection; MapView children must not be wrapped in View */}
-        {filteredMarkers.map((pet) => {
-          if (!isValidLatLng({ latitude: pet.latitude, longitude: pet.longitude })) {
-            return null;
-          }
-          if (!isValidLatLng({ latitude: pet.mapLatitude, longitude: pet.mapLongitude })) {
-            return null;
-          }
+        {SHOW_CIRCLES &&
+          visibleCirclePets.map((pet) => {
+            const center = {
+              latitude: pet.latitude,
+              longitude: pet.longitude,
+            };
+            if (!isValidLatLng(center)) return null;
 
-          const isSelected = samePetId(selectedPetId, pet.id);
-          const scanCount = isSelected
-            ? selectedPetScans.length
-            : scans.filter((s) => samePetId(s.pet_id, pet.id)).length;
+            return (
+              <Circle
+                key={`circle-${pet.id}`}
+                center={center}
+                radius={SEARCH_RADIUS_METERS}
+                fillColor={CIRCLE_FILL}
+                strokeColor={CIRCLE_STROKE}
+                strokeWidth={1}
+                zIndex={Z_PET_CIRCLE}
+              />
+            );
+          })}
 
-          return (
-            <Circle
-              key={`circle-${pet.id}`}
-              center={{ latitude: pet.latitude, longitude: pet.longitude }}
-              radius={SEARCH_RADIUS_METERS}
-              fillColor={CIRCLE_FILL}
-              strokeColor={CIRCLE_STROKE}
-              strokeWidth={1}
-              zIndex={isSelected ? 2 : 1}
-            />
-          );
-        })}
-        {filteredMarkers.map((pet) => {
-          if (!isValidLatLng({ latitude: pet.mapLatitude, longitude: pet.mapLongitude })) {
-            return null;
+        {visiblePets.map((pet) => {
+          const coordinate: LatLng = {
+            latitude: pet.mapLatitude,
+            longitude: pet.mapLongitude,
+          };
+          if (!isValidLatLng(coordinate)) return null;
+
+          if (SHOW_CUSTOM_MARKERS) {
+            return (
+              <Marker
+                key={`pet-${pet.id}`}
+                identifier={`pet-${pet.id}`}
+                coordinate={coordinate}
+                pinColor="red"
+                zIndex={Z_PET_MARKER}
+                tracksViewChanges={false}
+                onPress={() => handleMarkerPress(pet.id)}
+              >
+                <Callout onPress={() => handleMarkerPress(pet.id)}>
+                  <View style={styles.callout}>
+                    <Text style={styles.calloutTitle}>{pet.name || 'İsimsiz'}</Text>
+                    <Text style={styles.calloutSub}>Kayıp · Dokun → QR izi</Text>
+                  </View>
+                </Callout>
+              </Marker>
+            );
           }
-
-          const isSelected = samePetId(selectedPetId, pet.id);
-          const scanCount = isSelected
-            ? selectedPetScans.length
-            : scans.filter((s) => samePetId(s.pet_id, pet.id)).length;
 
           return (
             <Marker
-              key={`marker-${pet.id}`}
-              coordinate={{ latitude: pet.mapLatitude, longitude: pet.mapLongitude }}
+              key={`pet-${pet.id}`}
+              identifier={`pet-${pet.id}`}
+              coordinate={coordinate}
               pinColor="red"
-              zIndex={isSelected ? 4 : 3}
+              title={pet.name ?? 'İsimsiz'}
+              description="Kayıp"
+              zIndex={Z_PET_MARKER}
+              tracksViewChanges={false}
               onPress={() => handleMarkerPress(pet.id)}
-            >
-              <Callout onPress={() => handleMarkerPress(pet.id)}>
-                <View style={styles.callout}>
-                  <Text style={styles.calloutTitle}>{pet.name || 'İsimsiz'}</Text>
-                  <Text style={styles.calloutSub}>
-                    {pet.status ? `${pet.status} · ` : ''}
-                    {isSelected
-                      ? `${scanCount} QR izi — pati rotası`
-                      : scanCount > 0
-                        ? `${scanCount} tarama · dokun`
-                        : 'Dokun → QR izi'}
-                  </Text>
-                </View>
-              </Callout>
-            </Marker>
+            />
           );
         })}
 
-        {showPawTrail && selectedPet ? (
+        {willRenderPolyline && selectedPet ? (
           <Polyline
-            key={`trail-${selectedPet.id}-${pawTrailCoordinates.length}`}
-            coordinates={pawTrailCoordinates}
+            key={`trail-pet-${String(selectedPet.id)}`}
+            coordinates={polylineCoords}
             strokeColor="#16A34A"
             strokeWidth={3}
             lineDashPattern={[12, 8]}
-            zIndex={5}
+            zIndex={Z_POLYLINE}
           />
         ) : null}
 
-        {selectedPetScans.map((scan, index) => {
-          const coord = { latitude: scan.latitude, longitude: scan.longitude };
-          if (!isValidLatLng(coord)) return null;
+        {SHOW_SCAN_MARKERS &&
+          showSelectionOverlays &&
+          visibleSelectedScans.map((scan) => {
+            const scanCoord = {
+              latitude: scan.latitude,
+              longitude: scan.longitude,
+            };
+            if (!isValidLatLng(scanCoord)) return null;
 
-          return (
-            <Marker
-              key={`scan-${scan.id}`}
-              coordinate={coord}
-              pinColor="green"
-              zIndex={10 + index}
-            >
-              <Callout>
-                <View style={styles.callout}>
-                  <Text style={styles.calloutTitle}>🐾 Görülme #{index + 1}</Text>
-                  <Text style={styles.calloutSub}>
-                    {new Date(scan.scanned_at).toLocaleString('tr-TR')}
-                  </Text>
-                </View>
-              </Callout>
-            </Marker>
-          );
-        })}
+            return (
+              <Marker
+                key={`scan-${scan.id}`}
+                identifier={`scan-${scan.id}`}
+                coordinate={scanCoord}
+                pinColor="green"
+                title="QR tarama"
+                zIndex={Z_SCAN_MARKER}
+                tracksViewChanges={false}
+              />
+            );
+          })}
       </MapView>
 
-      <View style={[styles.overlay, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.topRow}>
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-            onPress={handleBack}
-            hitSlop={8}
-          >
-            <ArrowLeft color={BRAND.navy} size={22} strokeWidth={2.5} />
-          </Pressable>
+      <View
+        style={[styles.overlay, { paddingTop: insets.top + 8 }]}
+        pointerEvents="box-none"
+      >
+        <View style={styles.floatingPanel} pointerEvents="auto">
+          <View style={styles.topRow}>
+            <Pressable
+              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+              onPress={handleBack}
+              hitSlop={8}
+            >
+              <ArrowLeft color={BRAND.navy} size={22} strokeWidth={2.5} />
+            </Pressable>
 
-          <View style={styles.searchBar}>
-            <Search color={BRAND.muted} size={18} strokeWidth={2} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Hayvan ara..."
-              placeholderTextColor={BRAND.muted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-            />
-          </View>
-        </View>
-
-        <View style={styles.legendRow}>
-          <View style={styles.legendCard}>
-            <MapPin color={BRAND.danger} size={16} strokeWidth={2.5} />
-            <Text style={styles.legendText}>
-              {loading
-                ? 'Yükleniyor...'
-                : `${filteredMarkers.length}/${pets.length} hayvan · ${scans.length} iz`}
-            </Text>
-          </View>
-          {selectedPetId != null && (
-            <View style={[styles.legendCard, styles.legendGreen]}>
-              <MapPin color={BRAND.success} size={16} strokeWidth={2.5} />
-              <Text style={styles.legendText}>{selectedPetScans.length} yeşil pin</Text>
+            <View style={styles.searchBar}>
+              <Search color={BRAND.muted} size={18} strokeWidth={2} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Hayvan ara..."
+                placeholderTextColor={BRAND.muted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+              />
             </View>
-          )}
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.refreshButton,
+                (refreshing || loading) && styles.refreshButtonDisabled,
+                pressed && !refreshing && !loading && styles.pressed,
+              ]}
+              onPress={handleRefresh}
+              disabled={refreshing || loading}
+              accessibilityLabel="Haritayı yenile"
+              accessibilityHint="Kayıp hayvanları ve QR izlerini yeniden yükler"
+              hitSlop={8}
+            >
+              {refreshing ? (
+                <ActivityIndicator size="small" color={BRAND.primary} />
+              ) : (
+                <RefreshCw color={BRAND.navy} size={20} strokeWidth={2.5} />
+              )}
+            </Pressable>
+          </View>
+
+          {refreshing ? (
+            <Text style={styles.refreshHint}>Yenileniyor...</Text>
+          ) : null}
+
+          <View style={styles.legendRow}>
+            <View style={styles.legendCard}>
+              <MapPin color={BRAND.danger} size={16} strokeWidth={2.5} />
+              <Text style={styles.legendText}>
+                {loading
+                  ? 'Yükleniyor...'
+                  : refreshing
+                    ? 'Yenileniyor...'
+                    : searchActive
+                      ? `${visiblePets.length}/${mapPets.length} kayıp · ${scansForMapLostPets.length} iz`
+                      : `${mapPets.length} kayıp · ${scansForMapLostPets.length} iz`}
+              </Text>
+            </View>
+            {SHOW_SCAN_MARKERS && showSelectionOverlays && (
+              <View style={[styles.legendCard, styles.legendGreen]}>
+                <MapPin color={BRAND.success} size={16} strokeWidth={2.5} />
+                <Text style={styles.legendText}>{selectedScans.length} yeşil pin</Text>
+              </View>
+            )}
+          </View>
         </View>
 
-        {fetchError ? (
-          <View style={styles.hintBanner}>
+        <View style={styles.messagesStack} pointerEvents="box-none">
+        {refreshError ? (
+          <View style={[styles.hintBanner, styles.hintBannerError]} pointerEvents="auto">
+            <Text style={styles.hintTitle}>Harita yenilenemedi</Text>
+            <Text style={styles.hintBody}>{refreshError}</Text>
+          </View>
+        ) : null}
+
+        {fetchError && pets.length === 0 && scans.length === 0 ? (
+          <View style={styles.hintBanner} pointerEvents="auto">
             <Text style={styles.hintTitle}>Veri yüklenemedi</Text>
             <Text style={styles.hintBody}>{fetchError}</Text>
           </View>
         ) : null}
 
         {!loading && petsMissingCoords > 0 && (
-          <View style={styles.hintBanner}>
+          <View style={styles.hintBanner} pointerEvents="auto">
             <Text style={styles.hintTitle}>Konumsuz kayıtlar atlandı</Text>
             <Text style={styles.hintBody}>
               {petsMissingCoords} hayvan için geçerli latitude/longitude veya location_lat/lng yok.
@@ -482,14 +762,25 @@ export default function MapScreen() {
           </View>
         )}
 
-        {!loading && markers.length === 0 && (
-          <View style={styles.hintBanner}>
-            <Text style={styles.hintTitle}>Haritada gösterilecek pin yok</Text>
+        {!loading && lostPets.length === 0 && (
+          <View style={styles.hintBanner} pointerEvents="auto">
+            <Text style={styles.hintTitle}>Kayıp ilan yok</Text>
             <Text style={styles.hintBody}>
-              pets tablosuna geçerli koordinat ekleyin veya migrasyonu çalıştırın.
+              Haritada yalnızca is_lost = true olan hayvanlar gösterilir.
             </Text>
           </View>
         )}
+
+        {!loading && lostPets.length > 0 && mapPets.length === 0 && (
+          <View style={styles.hintBanner} pointerEvents="auto">
+            <Text style={styles.hintTitle}>Haritada gösterilecek pin yok</Text>
+            <Text style={styles.hintBody}>
+              Kayıp hayvanlar var ancak geçerli koordinat yok. latitude/longitude veya
+              location_lat/lng ekleyin.
+            </Text>
+          </View>
+        )}
+        </View>
       </View>
 
       {loading && (
@@ -508,13 +799,30 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 16,
-    gap: 10,
+    paddingHorizontal: 12,
+  },
+  floatingPanel: {
+    backgroundColor: 'rgba(248, 250, 252, 0.92)',
+    borderRadius: 16,
+    padding: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    shadowColor: BRAND.navy,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  messagesStack: {
+    marginTop: 8,
+    gap: 8,
+    paddingHorizontal: 4,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   backButton: {
     width: 44,
@@ -555,6 +863,28 @@ const styles = StyleSheet.create({
     color: BRAND.foreground,
     paddingVertical: 0,
   },
+  refreshButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: BRAND.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    shadowColor: BRAND.navy,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  refreshButtonDisabled: { opacity: 0.55 },
+  refreshHint: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: BRAND.primary,
+    marginLeft: 4,
+  },
   legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   legendCard: {
     flexDirection: 'row',
@@ -578,6 +908,7 @@ const styles = StyleSheet.create({
   },
   hintTitle: { fontSize: 14, fontWeight: '700', color: BRAND.navy, marginBottom: 4 },
   hintBody: { fontSize: 12, color: BRAND.muted, lineHeight: 18 },
+  hintBannerError: { borderLeftColor: BRAND.danger },
   callout: { minWidth: 140, padding: 4 },
   calloutTitle: { fontSize: 15, fontWeight: '700', color: BRAND.foreground, marginBottom: 4 },
   calloutSub: { fontSize: 12, color: BRAND.muted },

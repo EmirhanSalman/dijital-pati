@@ -9,12 +9,23 @@ export interface AdminActionResponse {
 }
 
 // --- PETS ---
+async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+  return profile?.role === 'admin';
+}
+
 export async function deletePetAsAdmin(petId: string): Promise<AdminActionResponse> {
   const supabase = await createClient();
   
-  // Auth Check
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return { success: false, error: 'Unauthorized' };
+
+  const isAdmin = await requireAdmin(supabase, user.id);
+  if (!isAdmin) return { success: false, error: 'Admin access required' };
 
   const { error } = await supabase.from('pets').delete().eq('id', petId);
 
