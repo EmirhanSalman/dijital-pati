@@ -21,13 +21,13 @@ const ContactOwnerModal = dynamic(() => import("@/components/ContactOwnerModal")
   loading: () => null, // No loading state needed since it's in a modal
   ssr: false,
 });
-import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
 import { getContract, getReadOnlyProvider } from "@/utils/web3";
 import { getGatewayUrl, fetchFromIpfsWithFallback } from "@/utils/ipfs";
+import { resolvePetImageUrl } from "@/lib/pets/resolve-pet-image-url";
 import ReportLostLocationDialog from "@/components/ReportLostLocationDialog";
 import ReportPublicSightingDialog from "@/components/ReportPublicSightingDialog";
 import { buildPetPublicUrl } from "@/lib/pet-public-url";
@@ -188,23 +188,25 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
             const meta = await res.json();
             finalName = meta.name || finalName;
             // Convert image URL to gateway URL if it's an IPFS URL
-            finalImage = meta.image ? getGatewayUrl(meta.image) : getGatewayUrl(tokenURI);
+            finalImage = resolvePetImageUrl(
+              meta.image ? getGatewayUrl(meta.image) : getGatewayUrl(tokenURI),
+              "pet-page/ipfs-meta"
+            );
           }
         } else {
           // If metadata fetch fails, ensure image URL is converted to gateway URL
-          finalImage = getGatewayUrl(tokenURI);
+          finalImage = resolvePetImageUrl(getGatewayUrl(tokenURI), "pet-page/ipfs-fallback");
         }
       } catch (e) {
         console.log("Metadata okunamadı", e);
-        // If metadata fetch fails, ensure image URL is converted to gateway URL
-        finalImage = getGatewayUrl(tokenURI);
+        finalImage = resolvePetImageUrl(getGatewayUrl(tokenURI), "pet-page/ipfs-error");
       }
 
       setUsedBlockchainFallback(true);
       setBlockchainData({
         id,
         name: finalName,
-        image: finalImage,
+        image: resolvePetImageUrl(finalImage, "pet-page/blockchain-set"),
         isLost: status[0],
         contact: status[1],
       });
@@ -351,7 +353,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     ? {
         id: petData.token_id,
         name: getPetName(),
-        image: getGatewayUrl(petData.image_url || ""),
+        image: resolvePetImageUrl(petData.image_url, "pet-page/db"),
         isLost: dbIsLost,
         phone: getContactPhone(),
         email: getContactEmail(),
@@ -363,7 +365,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     ? {
         ...blockchainData,
         name: getPetName(),
-        image: getGatewayUrl(blockchainData.image || ""),
+        image: resolvePetImageUrl(blockchainData.image, "pet-page/blockchain"),
         isLost: Boolean(blockchainData.isLost),
         phone: null,
         email: null,

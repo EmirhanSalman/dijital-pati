@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
 import Image from "next/image";
 import type { Pet } from "@/lib/supabase/server";
-import { getGatewayUrl } from "@/utils/ipfs";
+import { resolvePetImageUrl } from "@/lib/pets/resolve-pet-image-url";
+import { shouldUnoptimizeImageUrl, safeImageSrc } from "@/lib/image-display";
 import ContactOwnerModal from "@/components/ContactOwnerModal";
 
 interface PetCardProps {
@@ -30,6 +31,9 @@ export default function PetCard({ pet }: PetCardProps) {
     setIsLoading(false);
   };
 
+  const imageSrc = safeImageSrc(resolvePetImageUrl(pet.image_url, "PetCard"));
+  const unoptimizedImage = shouldUnoptimizeImageUrl(imageSrc);
+
   return (
     <Card className="border-2 hover:border-destructive/50 transition-colors overflow-hidden">
       <div className="relative h-64 w-full bg-gray-100 aspect-[4/3]">
@@ -37,16 +41,23 @@ export default function PetCard({ pet }: PetCardProps) {
         {isLoading && (
           <div className="absolute inset-0 animate-pulse bg-gray-200 z-10 pointer-events-none" />
         )}
-        <Image
-          src={getGatewayUrl(pet.image_url || "")}
-          alt={petName}
-          fill
-          className={`object-cover transition-opacity duration-300 ${
-            isLoading ? "opacity-0" : "opacity-100"
-          }`}
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          onLoad={handleImageLoad}
-        />
+        {imageSrc ? (
+          <Image
+            src={imageSrc}
+            alt={petName}
+            fill
+            unoptimized={unoptimizedImage}
+            className={`object-cover transition-opacity duration-300 ${
+              isLoading ? "opacity-0" : "opacity-100"
+            }`}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            onLoad={handleImageLoad}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            Görsel yok
+          </div>
+        )}
         <div className="absolute top-3 right-3 z-20">
           <Badge
             variant="destructive"

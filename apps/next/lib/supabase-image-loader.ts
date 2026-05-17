@@ -15,12 +15,27 @@ interface LoaderParams {
   quality?: number;
 }
 
+function appendTransformParams(url: string, width: number, quality: number): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("width", String(width));
+    parsed.searchParams.set("quality", String(quality));
+    return parsed.toString();
+  } catch {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}width=${width}&quality=${quality}`;
+  }
+}
+
 export default function supabaseLoader({ src, width, quality = 75 }: LoaderParams): string {
-  // Local paths: return as-is so the browser loads them directly.
-  // - Static imports become /_next/static/media/xxx.png (must not be wrapped in /_next/image or we get 404)
-  // - Public folder paths like /images/xxx.png also work when returned as-is
-  if (src.startsWith('/')) {
-    return src;
+  // Local / static paths: append width so Next.js loader contract is satisfied
+  if (src.startsWith("/")) {
+    return appendTransformParams(src, width, quality);
+  }
+
+  if (/^ipfs:\/\//i.test(src)) {
+    console.warn("[supabaseLoader] ipfs:// passed to Image loader — resolve before render:", src);
+    return appendTransformParams(src, width, quality);
   }
 
   // If src is already a full URL (starts with http:// or https://)
@@ -35,9 +50,8 @@ export default function supabaseLoader({ src, width, quality = 75 }: LoaderParam
       return url.toString();
     }
     
-    // For non-Supabase URLs, return as-is (let Next.js handle it or use default loader)
-    // This handles IPFS, Unsplash, etc.
-    return src;
+    // External URLs (IPFS gateway, Unsplash, …): include width so Next.js loader contract is satisfied
+    return appendTransformParams(src, width, quality);
   }
 
   // For relative paths, construct the full Supabase storage URL

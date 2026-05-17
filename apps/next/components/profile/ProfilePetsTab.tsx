@@ -16,7 +16,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
 import { QRCodeSVG } from "qrcode.react";
-import { getGatewayUrl } from "@/utils/ipfs";
+import { resolvePetImageUrl } from "@/lib/pets/resolve-pet-image-url";
+import { shouldUnoptimizeImageUrl, safeImageSrc } from "@/lib/image-display";
 import { buildPetPublicUrl } from "@/lib/pet-public-url";
 
 export default function ProfilePetsTab() {
@@ -211,13 +212,19 @@ export default function ProfilePetsTab() {
             ? pet.name 
             : `Pati #${pet.token_id}`;
 
+          const imageSrc = safeImageSrc(
+            resolvePetImageUrl(pet.image_url, "ProfilePetsTab")
+          );
+          const unoptimizedImage = shouldUnoptimizeImageUrl(imageSrc);
+
           return (
             <Card key={pet.id || pet.token_id} className="border-2 hover:border-primary/50 transition-colors">
               <div className="relative h-48 w-full overflow-hidden rounded-t-lg bg-gray-100">
                 <Image
-                  src={getGatewayUrl(pet.image_url || "")}
+                  src={imageSrc}
                   alt={petName}
                   fill
+                  unoptimized={unoptimizedImage}
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 />

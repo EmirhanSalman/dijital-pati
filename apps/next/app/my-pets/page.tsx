@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, PawPrint, CheckCircle, AlertTriangle, ExternalLink, Heart, Shield } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { resolvePetImageUrl } from "@/lib/pets/resolve-pet-image-url";
+import { shouldUnoptimizeImageUrl } from "@/lib/image-display";
 import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
 import ReportLostLocationDialog from "@/components/ReportLostLocationDialog";
@@ -287,13 +289,17 @@ export default function MyPetsPage() {
               </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {pets.map((pet) => (
+            {pets.map((pet) => {
+              const imageSrc = resolvePetImageUrl(pet.image_url);
+              const unoptimizedImage = shouldUnoptimizeImageUrl(imageSrc);
+              return (
               <Card key={pet.token_id} className="border-2 hover:shadow-lg transition-shadow overflow-hidden">
                 <div className="relative h-56 w-full bg-gray-100 aspect-[4/3]">
                   <Image
-                    src={pet.image_url}
+                    src={imageSrc || "/images/dog-qr.jpg"}
                     alt={pet.name}
                     fill
+                    unoptimized={unoptimizedImage}
                     className="object-cover"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
@@ -357,7 +363,8 @@ export default function MyPetsPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            );
+            })}
             </div>
           </>
         )}

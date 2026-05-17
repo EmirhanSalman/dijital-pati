@@ -5,6 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import Link from "next/link";
+import { resolvePetImageUrl } from "@/lib/pets/resolve-pet-image-url";
+import { shouldUnoptimizeImageUrl, safeImageSrc } from "@/lib/image-display";
 import AdminDeleteButton from "@/components/admin/AdminDeleteButton";
 import type { Pet } from "@/lib/supabase/server";
 
@@ -69,16 +71,27 @@ export default async function AdminPetsPage() {
                   ? pet.name
                   : `Pati #${pet.token_id}`;
 
+              const imageSrc = safeImageSrc(
+                resolvePetImageUrl(pet.image_url, "admin/pets")
+              );
+
               return (
                 <Card key={pet.id} className="border-2 overflow-hidden">
                   <div className="relative h-48 w-full bg-gray-100">
-                    <Image
-                      src={pet.image_url}
-                      alt={petName}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    />
+                    {imageSrc ? (
+                      <Image
+                        src={imageSrc}
+                        alt={petName}
+                        fill
+                        unoptimized={shouldUnoptimizeImageUrl(imageSrc)}
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                        Görsel yok
+                      </div>
+                    )}
                     <div className="absolute top-3 right-3 flex gap-2">
                       {pet.is_lost && (
                         <Badge

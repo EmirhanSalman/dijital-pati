@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { resolvePetImageUrl } from "@/lib/pets/resolve-pet-image-url";
+import { shouldUnoptimizeImageUrl, safeImageSrc } from "@/lib/image-display";
 import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import { AlertTriangle, CheckCircle } from "lucide-react";
@@ -29,6 +31,10 @@ export default function PetQrCard({
   
   // Canonical public URL uses token_id — never pets.id
   const qrUrl = petUrl || buildPetPublicUrl(petId);
+  const displayImage =
+    safeImageSrc(resolvePetImageUrl(petImage, "PetQrCard"), "/images/dog-qr.jpg") ||
+    "/images/dog-qr.jpg";
+  const unoptimizedImage = shouldUnoptimizeImageUrl(displayImage);
 
   return (
     <div
@@ -83,9 +89,10 @@ export default function PetQrCard({
 
             <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden mb-4 shadow-lg">
               <Image
-                src={petImage}
+                src={displayImage}
                 alt="Pet ID Card"
                 fill
+                unoptimized={unoptimizedImage}
                 className="object-cover"
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                 priority

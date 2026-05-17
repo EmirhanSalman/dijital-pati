@@ -1,7 +1,29 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+/** Public read-only API routes — no session refresh needed. */
+const PUBLIC_API_PREFIXES = [
+  '/api/map/',
+  '/api/lost-pets/public',
+  '/api/pet-scans/public',
+  '/api/pets/public',
+]
+
+function isStaleRefreshTokenError(message: string | undefined): boolean {
+  if (!message) return false
+  return (
+    message.includes('Refresh Token Not Found') ||
+    message.includes('Invalid Refresh Token')
+  )
+}
+
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  if (PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return NextResponse.next()
+  }
+
   // Environment variables kontrolü
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -46,7 +68,14 @@ export async function middleware(request: NextRequest) {
 
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser()
+
+  // Stale/invalid refresh cookie: clear session so public pages stay quiet and
+  // protected flows get a clean unauthenticated state (not a hard failure).
+  if (authError && isStaleRefreshTokenError(authError.message)) {
+    await supabase.auth.signOut()
+  }
 
   // Kullanıcı yoksa ve korumalı route'lardaysa yönlendirme yapılabilir
   // Şimdilik tüm route'lara erişim serbest, sadece session yenileniyor

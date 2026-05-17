@@ -52,6 +52,7 @@ export default function NavbarClient({
     { href: "/news", label: "Haberler" },
     { href: "/forum", label: "Forum" },
     { href: "/lost-pets", label: "Kayıp İlanları" },
+    { href: "/map", label: "Kayıp Haritası" },
   ];
 
   // Kullanıcının baş harflerini al

@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import { getLostPetDetailForPage } from "@/lib/pets/public-access";
 import RemoteImage from "@/components/ui/RemoteImage";
-import { resolveImageUrl } from "@/lib/image-utils";
 import { formatDateTR } from "@/lib/utils/date";
 
 interface LostPetDetailPageProps {
@@ -87,6 +86,7 @@ export default async function LostPetDetailPage({ params }: LostPetDetailPagePro
               fill
               className="object-cover"
               sizes="(max-width: 1024px) 100vw, 50vw"
+              resolveContext="lost-pets/detail"
             />
           </div>
 
@@ -171,7 +171,7 @@ export default async function LostPetDetailPage({ params }: LostPetDetailPagePro
                               alt={ownerProfile.full_name || ownerProfile.username || "Owner"}
                               fill
                               className="object-cover"
-                              type="supabase"
+                              resolveContext="lost-pets/owner-avatar"
                             />
                           </div>
                         )}
