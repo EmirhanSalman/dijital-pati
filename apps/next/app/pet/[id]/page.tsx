@@ -10,7 +10,7 @@ import {
   Loader2,
   QrCode,
   Shield,
-  ExternalLink,
+  MapPin,
 } from "lucide-react";
 import PetQrCard from "@/components/PetQrCard";
 import dynamic from "next/dynamic";
@@ -29,6 +29,7 @@ import type { Pet } from "@/lib/supabase/server";
 import { getContract, getReadOnlyProvider } from "@/utils/web3";
 import { getGatewayUrl, fetchFromIpfsWithFallback } from "@/utils/ipfs";
 import ReportLostLocationDialog from "@/components/ReportLostLocationDialog";
+import ReportPublicSightingDialog from "@/components/ReportPublicSightingDialog";
 import { buildPetPublicUrl } from "@/lib/pet-public-url";
 
 // Get contract address from environment variable, with fallback for local development
@@ -56,6 +57,8 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
+  const [sightingDialogOpen, setSightingDialogOpen] = useState(false);
+  const [sightingMessage, setSightingMessage] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [usedBlockchainFallback, setUsedBlockchainFallback] = useState(false);
 
@@ -403,6 +406,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
       : buildPetPublicUrl(qrSlug);
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12">
       <div className="container mx-auto px-4 max-w-6xl">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -500,11 +504,26 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
                         </h3>
                       </div>
                       <p className="text-red-700">
-                        Bu evcil hayvan kaybolmuş durumda. Eğer bu hayvanı gördüyseniz, lütfen
-                        aşağıdaki butona tıklayarak sahibiyle iletişime geçin.
+                        Bu evcil hayvan kaybolmuş durumda. Görüldüğü konumu bildirerek sahibine
+                        yardımcı olabilirsiniz (kırmızı pin — kayıp yeri — değişmez).
                       </p>
 
+                      {sightingMessage ? (
+                        <p className="text-sm font-medium text-green-800 bg-green-50 border border-green-200 rounded-lg p-3">
+                          {sightingMessage}
+                        </p>
+                      ) : null}
+
                       <div className="space-y-3">
+                        <Button
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-6 text-lg font-bold shadow-lg"
+                          size="lg"
+                          onClick={() => setSightingDialogOpen(true)}
+                        >
+                          <MapPin className="mr-2 h-5 w-5" />
+                          Bu Hayvanı Gördüm — Konum Bildir
+                        </Button>
+
                         {isLoggedIn && petData && hasContactInfo ? (
                           <ContactOwnerModal
                             pet={petData}
@@ -593,6 +612,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
           </div>
         </div>
       </div>
+    </div>
 
       <ReportLostLocationDialog
         open={lostDialogOpen}
@@ -601,6 +621,16 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
         loading={toggling}
         onConfirm={handleConfirmLostReport}
       />
-    </div>
+
+      {petData?.token_id ? (
+        <ReportPublicSightingDialog
+          open={sightingDialogOpen}
+          onOpenChange={setSightingDialogOpen}
+          petName={getPetName()}
+          tokenId={String(petData.token_id)}
+          onSuccess={(msg) => setSightingMessage(msg)}
+        />
+      ) : null}
+    </>
   );
 }

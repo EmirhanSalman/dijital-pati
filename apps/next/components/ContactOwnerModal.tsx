@@ -118,6 +118,22 @@ export default function ContactOwnerModal({ pet, trigger }: ContactOwnerModalPro
       });
 
       if (result.success) {
+        if (location && pet.token_id) {
+          try {
+            await fetch("/api/pet-scans/public", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              cache: "no-store",
+              body: JSON.stringify({
+                token_id: String(pet.token_id),
+                latitude: location.lat,
+                longitude: location.lng,
+              }),
+            });
+          } catch (scanErr) {
+            console.warn("pet_scans public insert after contact:", scanErr);
+          }
+        }
         setSuccess(true);
         // Formu temizle
         setFormData({
