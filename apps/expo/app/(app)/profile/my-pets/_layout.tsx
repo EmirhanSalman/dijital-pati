@@ -13,7 +13,7 @@ export default function MyPetsLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: 'Evcil Hayvanlarım' }} />
-      <Stack.Screen name="new" options={{ title: 'Evcil Hayvan Ekle' }} />
+      <Stack.Screen name="new" options={{ title: 'Yeni Kayıt' }} />
       <Stack.Screen name="[id]/edit" options={{ title: 'Hayvanı Düzenle' }} />
     </Stack>
   );

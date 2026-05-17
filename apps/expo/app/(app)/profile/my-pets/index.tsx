@@ -16,6 +16,7 @@ import { BRAND } from '../../../../lib/brand';
 import { fetchOwnPets, resolveImageUri, type OwnedPet } from '../../../../lib/pets-owner';
 import { getPetLostBadgeStyle, isLostPet } from '../../../../lib/pet-status';
 import { PetQrLinkActions } from '../../../../components/PetQrLinkActions';
+import { openWebCreatePetRegistration, promptWebCreatePetRegistration } from '../../../../lib/web-create-pet';
 
 export default function MyPetsScreen() {
   const router = useRouter();
@@ -86,8 +87,16 @@ export default function MyPetsScreen() {
         {pets.length === 0 && !error ? (
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🐾</Text>
-            <Text style={styles.emptyTitle}>Henüz evcil hayvan eklemediniz.</Text>
-            <Text style={styles.emptySub}>İlk kaydınızı oluşturarak başlayın.</Text>
+            <Text style={styles.emptyTitle}>Henüz evcil hayvanınız yok.</Text>
+            <Text style={styles.emptySub}>
+              Blockchain tabanlı kayıt oluşturmak için web sitesine geçebilirsiniz.
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
+              onPress={() => void openWebCreatePetRegistration()}
+            >
+              <Text style={styles.emptyBtnText}>Web&apos;de Evcil Hayvan Kaydet</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -136,10 +145,10 @@ export default function MyPetsScreen() {
 
       <Pressable
         style={({ pressed }) => [styles.fab, pressed && { opacity: 0.9 }]}
-        onPress={() => router.push('/(app)/profile/my-pets/new')}
+        onPress={promptWebCreatePetRegistration}
       >
         <Plus color="#fff" size={22} strokeWidth={2.5} />
-        <Text style={styles.fabText}>Evcil Hayvan Ekle</Text>
+        <Text style={styles.fabText}>Yeni Evcil Hayvan Kaydet</Text>
       </Pressable>
     </View>
   );
@@ -161,7 +170,20 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: 48 },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyTitle: { fontSize: 17, fontWeight: '700', color: BRAND.navy, marginBottom: 6 },
-  emptySub: { fontSize: 14, color: BRAND.muted, textAlign: 'center' },
+  emptySub: {
+    fontSize: 14,
+    color: BRAND.muted,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  emptyBtn: {
+    backgroundColor: BRAND.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  emptyBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   cardWrap: {
     backgroundColor: BRAND.surface,
     borderRadius: 14,

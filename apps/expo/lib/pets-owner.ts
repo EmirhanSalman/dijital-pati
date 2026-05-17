@@ -26,20 +26,6 @@ export function resolveImageUri(url: string | null | undefined): string | null {
   return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
 }
 
-/** Mobile-only pets: unique slug, never equals pets.id */
-export async function generateUniqueAppTokenId(): Promise<string> {
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const candidate = `app-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const { data } = await supabase
-      .from('pets')
-      .select('id')
-      .eq('token_id', candidate)
-      .maybeSingle();
-    if (!data) return candidate;
-  }
-  throw new Error('Benzersiz token_id oluşturulamadı. Lütfen tekrar deneyin.');
-}
-
 const OWN_PET_SELECT =
   'id, token_id, name, breed, description, image_url, is_lost, owner_id, city, district';
 
