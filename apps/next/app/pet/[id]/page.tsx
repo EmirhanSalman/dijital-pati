@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback } from "react";
+import Link from "next/link";
+import { Lock, User } from "lucide-react";
 import { ethers } from "ethers";
 import {
   CheckCircle,
@@ -54,6 +56,44 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [toggling, setToggling] = useState(false);
   const [lostDialogOpen, setLostDialogOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [usedBlockchainFallback, setUsedBlockchainFallback] = useState(false);
+
+  const checkOwnerStatus = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      setIsLoggedIn(Boolean(user));
+
+      if (user) {
+        setCurrentUserId(user.id);
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("wallet_address, role")
+          .eq("id", user.id)
+          .single();
+
+        if (profile) {
+          if (profile.wallet_address) {
+            setCurrentUserAddress(profile.wallet_address.toLowerCase());
+          }
+          if (profile.role === "admin") {
+            setIsAdmin(true);
+          }
+        }
+      } else {
+        setCurrentUserId(null);
+        setCurrentUserAddress(null);
+        setIsAdmin(false);
+      }
+    } catch (err) {
+      console.log("Owner check error:", err);
+    }
+  }, []);
 
   useEffect(() => {
     if (id !== null && id !== undefined) {
@@ -81,70 +121,46 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     }
   }, [currentUserAddress, ownerAddress, currentUserId, petData]);
 
-  const checkOwnerStatus = async () => {
-    try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        setCurrentUserId(user.id);
-        
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("wallet_address, role")
-          .eq("id", user.id)
-          .single();
-
-        if (profile) {
-          if (profile.wallet_address) {
-            setCurrentUserAddress(profile.wallet_address.toLowerCase());
-          }
-          // Check if user is admin
-          if (profile.role === "admin") {
-            setIsAdmin(true);
-          }
-        }
-      }
-    } catch (err) {
-      console.log("Owner check error:", err);
-    }
-  };
-
   const fetchPetData = async () => {
     try {
       setLoading(true);
+      setUsedBlockchainFallback(false);
+      setBlockchainData(null);
+      setPetData(null);
 
-      // Try to fetch from Supabase first
       try {
-        const response = await fetch(`/api/pets/${id}`);
+        const response = await fetch(`/api/pets/${encodeURIComponent(id)}`, {
+          cache: "no-store",
+        });
         if (response.ok) {
           const supabasePet: Pet = await response.json();
-          setPetData(supabasePet);
-          setOwnerAddress(supabasePet.owner_address);
-          
-          // Check if current user is owner (by owner_id or wallet address)
-          if (currentUserId && supabasePet.owner_id) {
-            setIsOwner(currentUserId === supabasePet.owner_id);
-          } else if (currentUserAddress && supabasePet.owner_address) {
-            setIsOwner(currentUserAddress === supabasePet.owner_address.toLowerCase());
+          if (process.env.NODE_ENV === "development") {
+            console.log("[pet-page] DB pet loaded", {
+              token_id: id,
+              name: supabasePet.name,
+              is_lost: supabasePet.is_lost,
+            });
           }
-
+          setPetData(supabasePet);
+          if (supabasePet.owner_address) {
+            setOwnerAddress(supabasePet.owner_address);
+          }
           setLoading(false);
           return;
-        } else if (response.status === 404) {
-          // If 404, show loading message and try blockchain
-          console.log("Pet not found in database, loading from blockchain...");
-          setError(null); // Clear any previous errors
-          setLoadingFromBlockchain(true); // Show loading message
-          // Continue to blockchain fallback below
+        }
+        if (response.status === 404) {
+          if (process.env.NODE_ENV === "development") {
+            console.log("[pet-page] DB miss, blockchain fallback", { token_id: id });
+          }
+          setError(null);
+          setLoadingFromBlockchain(true);
         }
       } catch (supabaseError) {
-        console.log("Supabase fetch failed, trying blockchain:", supabaseError);
+        console.log("Database fetch failed, trying blockchain:", supabaseError);
+        setLoadingFromBlockchain(true);
       }
 
-      // Fallback to blockchain - Use read-only provider (works without wallet)
+      // Blockchain fallback only when no DB row exists
       setLoadingFromBlockchain(true);
       const contractAddress = getContractAddress();
       console.log("📍 Using contract address:", contractAddress);
@@ -181,6 +197,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
         finalImage = getGatewayUrl(tokenURI);
       }
 
+      setUsedBlockchainFallback(true);
       setBlockchainData({
         id,
         name: finalName,
@@ -189,7 +206,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
         contact: status[1],
       });
       setOwnerAddress(owner);
-      setLoadingFromBlockchain(false); // Successfully loaded from blockchain
+      setLoadingFromBlockchain(false);
 
       // Check if current user is owner
       if (currentUserAddress && owner.toLowerCase() === currentUserAddress) {
@@ -307,17 +324,12 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   // 2. Blockchain/metadata name - Second priority
   // 3. Fallback to "Pati #ID" - Only if neither exists
   const getPetName = (): string => {
-    // Priority 1: Database name
-    if (petData?.name && petData.name.trim() && petData.name !== `Pati #${petData.token_id}`) {
-      return petData.name;
+    if (petData?.name?.trim()) {
+      return petData.name.trim();
     }
-    
-    // Priority 2: Blockchain/metadata name
-    if (blockchainData?.name && blockchainData.name.trim() && blockchainData.name !== `Pati #${id}`) {
-      return blockchainData.name;
+    if (usedBlockchainFallback && blockchainData?.name?.trim()) {
+      return blockchainData.name.trim();
     }
-    
-    // Priority 3: Fallback to ID-based name
     return `Pati #${petData?.token_id || id}`;
   };
 
@@ -330,15 +342,17 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     return petData?.contact_email || null;
   };
 
+  const dbIsLost = petData?.is_lost === true;
+
   const displayData = petData
     ? {
         id: petData.token_id,
         name: getPetName(),
-        image: getGatewayUrl(petData.image_url || ""), // Convert IPFS URLs to gateway URLs
-        isLost: petData.is_lost,
+        image: getGatewayUrl(petData.image_url || ""),
+        isLost: dbIsLost,
         phone: getContactPhone(),
         email: getContactEmail(),
-        contact: petData.contact_info || petData.contact_phone || petData.contact_email || "", // Fallback
+        contact: petData.contact_info || petData.contact_phone || petData.contact_email || "",
         breed: petData.breed,
         description: petData.description,
       }
@@ -346,11 +360,16 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
     ? {
         ...blockchainData,
         name: getPetName(),
-        image: getGatewayUrl(blockchainData.image || ""), // Convert IPFS URLs to gateway URLs
+        image: getGatewayUrl(blockchainData.image || ""),
+        isLost: Boolean(blockchainData.isLost),
         phone: null,
         email: null,
       }
     : null;
+
+  const hasContactInfo = Boolean(
+    displayData?.phone || displayData?.email || displayData?.contact
+  );
 
   if (loading || loadingFromBlockchain) {
     return (
@@ -485,13 +504,12 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
                         aşağıdaki butona tıklayarak sahibiyle iletişime geçin.
                       </p>
 
-                      <div>
-                        {/* Contact Owner Modal */}
-                        {petData && (petData.contact_phone || petData.contact_email || petData.contact_info) && (
+                      <div className="space-y-3">
+                        {isLoggedIn && petData && hasContactInfo ? (
                           <ContactOwnerModal
                             pet={petData}
                             trigger={
-                              <Button 
+                              <Button
                                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg font-bold shadow-lg"
                                 size="lg"
                               >
@@ -499,7 +517,29 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
                               </Button>
                             }
                           />
-                        )}
+                        ) : null}
+                        {isLoggedIn && !hasContactInfo ? (
+                          <p className="text-sm text-red-800">
+                            İletişim bilgisi bulunamadı.
+                          </p>
+                        ) : null}
+                        {!isLoggedIn ? (
+                          <div className="space-y-3 text-center">
+                            <p className="text-sm text-red-800 flex items-center justify-center gap-2">
+                              <Lock className="h-4 w-4 shrink-0" />
+                              Sahip iletişim bilgileri gizlilik için korunmaktadır.
+                            </p>
+                            <p className="text-sm font-medium text-red-900">
+                              İletişim için lütfen giriş yapın.
+                            </p>
+                            <Button asChild className="w-full" size="lg">
+                              <Link href="/login">
+                                <User className="mr-2 h-4 w-4" />
+                                Giriş Yap
+                              </Link>
+                            </Button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>

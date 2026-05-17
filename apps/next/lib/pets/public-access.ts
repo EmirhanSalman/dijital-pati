@@ -74,6 +74,10 @@ export async function getPublicLostPets(
     publicDtoToPetCardShape(rowToPublicPetDto(row as Record<string, unknown>))
   ) as Pet[];
 
+  if (process.env.NODE_ENV === "development") {
+    console.log("[public-lost-pets] list", { count: count ?? 0 });
+  }
+
   return { pets, count: count ?? 0 };
 }
 
@@ -113,7 +117,15 @@ export async function getPublicLostPetByIdentifier(
   return rowToPublicPetDto(data as Record<string, unknown>);
 }
 
-/** Public QR page: resolve by token_id (or legacy id), any lost/safe status. */
+function logPublicPetLookup(
+  identifier: string,
+  info: { found: boolean; name?: string; is_lost?: boolean; method?: string }
+) {
+  if (process.env.NODE_ENV !== "development") return;
+  console.log("[public-pet]", { token_id: identifier, ...info });
+}
+
+/** Public QR page: resolve by pets.token_id only (never pets.id for numeric slugs). */
 export async function getPublicPetByQrIdentifier(
   identifier: string
 ): Promise<PublicPetDto | null> {
@@ -122,29 +134,30 @@ export async function getPublicPetByQrIdentifier(
   if (!trimmed) return null;
 
   const tokenCandidates = new Set<string>([trimmed]);
-  if (/^\d+$/.test(trimmed)) tokenCandidates.add(String(Number(trimmed)));
+  if (/^\d+$/.test(trimmed)) {
+    tokenCandidates.add(String(Number(trimmed)));
+  }
 
   for (const candidate of tokenCandidates) {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("pets")
       .select(PUBLIC_PET_SELECT)
       .eq("token_id", candidate)
       .maybeSingle();
 
-    if (data) {
-      return rowToPublicPetDto(data as Record<string, unknown>);
+    if (error) {
+      console.error("getPublicPetByQrIdentifier token_id error:", error);
     }
-  }
 
-  if (/^\d+$/.test(trimmed)) {
-    const { data: byId } = await admin
-      .from("pets")
-      .select(PUBLIC_PET_SELECT)
-      .eq("id", trimmed)
-      .maybeSingle();
-
-    if (byId) {
-      return rowToPublicPetDto(byId as Record<string, unknown>);
+    if (data) {
+      const dto = rowToPublicPetDto(data as Record<string, unknown>);
+      logPublicPetLookup(trimmed, {
+        found: true,
+        name: dto.name,
+        is_lost: dto.is_lost,
+        method: "token_id",
+      });
+      return dto;
     }
   }
 
@@ -156,11 +169,53 @@ export async function getPublicPetByQrIdentifier(
       .maybeSingle();
 
     if (byUuid) {
-      return rowToPublicPetDto(byUuid as Record<string, unknown>);
+      const dto = rowToPublicPetDto(byUuid as Record<string, unknown>);
+      logPublicPetLookup(trimmed, {
+        found: true,
+        name: dto.name,
+        is_lost: dto.is_lost,
+        method: "uuid_id",
+      });
+      return dto;
     }
   }
 
+  logPublicPetLookup(trimmed, { found: false });
   return null;
+}
+
+const CONTACT_SELECT =
+  "owner_id, owner_address, contact_phone, contact_email, contact_info";
+
+/** QR page API: DB public fields + contact/owner only when request is authenticated. */
+export async function getPetForQrApiResponse(
+  identifier: string,
+  userId: string | null | undefined
+): Promise<Record<string, unknown> | null> {
+  const publicPet = await getPublicPetByQrIdentifier(identifier);
+  if (!publicPet) return null;
+
+  const base = publicDtoToPetCardShape(publicPet) as Record<string, unknown>;
+
+  if (!userId) {
+    return base;
+  }
+
+  const admin = createServiceRoleClient();
+  const { data: contactRow } = await admin
+    .from("pets")
+    .select(CONTACT_SELECT)
+    .eq("token_id", publicPet.token_id)
+    .maybeSingle();
+
+  return {
+    ...base,
+    owner_id: contactRow?.owner_id ?? null,
+    owner_address: contactRow?.owner_address ?? "",
+    contact_phone: contactRow?.contact_phone ?? null,
+    contact_email: contactRow?.contact_email ?? null,
+    contact_info: contactRow?.contact_info ?? null,
+  };
 }
 
 export async function getLostPetsForPage(

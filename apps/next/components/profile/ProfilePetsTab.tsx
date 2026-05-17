@@ -48,27 +48,30 @@ export default function ProfilePetsTab() {
         return;
       }
 
-      // Fetch pets directly from Supabase using owner_id (more reliable than wallet_address)
-      const { data: petsData, error: petsError } = await supabase
-        .from("pets")
-        .select("*")
-        .eq("owner_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (petsError) {
-        console.error("Fetch pets error:", petsError);
-        
-        // If table doesn't exist, return empty array
-        if (petsError.code === "42P01") {
-          setPets([]);
-          setLoading(false);
-          return;
-        }
-        
-        throw new Error(petsError.message || "Petler yüklenemedi.");
+      const response = await fetch("/api/pets", { cache: "no-store", credentials: "include" });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "Petler yüklenemedi.");
       }
 
-      setPets(petsData || []);
+      const petsData: Pet[] = await response.json();
+      const normalized = (petsData ?? []).map((pet) => ({
+        ...pet,
+        is_lost: pet.is_lost === true,
+      }));
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("[ProfilePetsTab] pets loaded", {
+          count: normalized.length,
+          pets: normalized.map((p) => ({
+            name: p.name,
+            token_id: p.token_id,
+            is_lost: p.is_lost,
+          })),
+        });
+      }
+
+      setPets(normalized);
     } catch (err: any) {
       console.error("Fetch pets error:", err);
       setError(err.message || "Petler yüklenirken bir hata oluştu.");

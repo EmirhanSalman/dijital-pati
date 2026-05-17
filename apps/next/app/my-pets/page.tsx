@@ -53,14 +53,18 @@ export default function MyPetsPage() {
 
       setWalletAddress(profile.wallet_address);
 
-      // Fetch pets from Supabase
-      const response = await fetch(`/api/pets?owner=${encodeURIComponent(profile.wallet_address)}`);
+      const response = await fetch("/api/pets", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
         throw new Error("Petler yüklenemedi.");
       }
 
-      const data = await response.json();
-      setPets(data);
+      const data: Pet[] = await response.json();
+      setPets(
+        (data ?? []).map((pet) => ({
+          ...pet,
+          is_lost: pet.is_lost === true,
+        }))
+      );
     } catch (err: any) {
       console.error("Fetch pets error:", err);
       setError(err.message || "Petler yüklenirken bir hata oluştu.");

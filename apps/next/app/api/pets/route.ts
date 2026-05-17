@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserPets } from "@/lib/supabase/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
+
+function normalizePetRow(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...row,
+    is_lost: row.is_lost === true || row.is_lost === "true",
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -29,7 +41,20 @@ export async function GET(request: NextRequest) {
           { status: 500 }
         );
       }
-      return NextResponse.json(data ?? []);
+      const rows = (data ?? []).map((row) =>
+        normalizePetRow(row as Record<string, unknown>)
+      );
+      if (process.env.NODE_ENV === "development") {
+        console.log("[api/pets] owner_id list", {
+          count: rows.length,
+          pets: rows.map((p) => ({
+            name: p.name,
+            token_id: p.token_id,
+            is_lost: p.is_lost,
+          })),
+        });
+      }
+      return NextResponse.json(rows, { headers: NO_STORE });
     }
 
     const { data: profile } = await supabase
@@ -44,7 +69,10 @@ export async function GET(request: NextRequest) {
     }
 
     const pets = await getUserPets(ownerAddress);
-    return NextResponse.json(pets);
+    return NextResponse.json(
+      pets.map((p) => normalizePetRow(p as unknown as Record<string, unknown>)),
+      { headers: NO_STORE }
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch pets";
     console.error("Get pets API error:", error);
