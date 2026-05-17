@@ -700,6 +700,11 @@ export interface Pet {
   is_lost: boolean;
   city: string | null;
   district: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  lost_reported_at?: string | null;
   created_at: string;
   updated_at?: string | null;
 }
