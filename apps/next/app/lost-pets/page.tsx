@@ -5,7 +5,7 @@ import PetCard from "@/components/PetCard";
 import FilterBar from "@/components/pets/FilterBar";
 import PaginationControls from "@/components/ui/PaginationControls";
 import { Suspense } from "react";
-import { getPets } from "@/lib/supabase/server";
+import { getLostPetsForPage } from "@/lib/pets/public-access";
 
 interface LostPetsPageProps {
   searchParams: Promise<{
@@ -25,13 +25,12 @@ export default async function LostPetsPage({ searchParams }: LostPetsPageProps) 
   const limit = 12;
 
   // Filtrelenmiş kayıp pet'leri getir (sayfalama ile)
-  const { pets, count } = await getPets(
+  const { pets, count } = await getLostPetsForPage(
     {
       query: params.query,
       type: params.type,
       city: params.city,
       sort: params.sort || "newest",
-      isLost: true, // Sadece kayıp hayvanları getir
     },
     currentPage,
     limit

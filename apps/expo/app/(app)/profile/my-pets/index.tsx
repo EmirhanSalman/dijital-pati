@@ -15,6 +15,7 @@ import { useAuth } from '../../../_layout';
 import { BRAND } from '../../../../lib/brand';
 import { fetchOwnPets, resolveImageUri, type OwnedPet } from '../../../../lib/pets-owner';
 import { getPetLostBadgeStyle, isLostPet } from '../../../../lib/pet-status';
+import { PetQrLinkActions } from '../../../../components/PetQrLinkActions';
 
 export default function MyPetsScreen() {
   const router = useRouter();
@@ -96,38 +97,39 @@ export default function MyPetsScreen() {
           const imageUri = resolveImageUri(pet.image_url);
 
           return (
-            <Pressable
-              key={String(pet.id)}
-              style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-              onPress={() =>
-                router.push({
-                  pathname: '/(app)/profile/my-pets/[id]/edit',
-                  params: { id: String(pet.id) },
-                })
-              }
-            >
-              <View style={styles.cardLeft}>
-                {imageUri ? (
-                  <Image source={{ uri: imageUri }} style={styles.thumb} />
-                ) : (
-                  <View style={styles.thumbPlaceholder}>
-                    <Text style={styles.thumbEmoji}>🐾</Text>
-                  </View>
-                )}
+            <View key={String(pet.id)} style={styles.cardWrap}>
+              <Pressable
+                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(app)/profile/my-pets/[id]/edit',
+                    params: { id: String(pet.id) },
+                  })
+                }
+              >
+                <View style={styles.cardLeft}>
+                  {imageUri ? (
+                    <Image source={{ uri: imageUri }} style={styles.thumb} />
+                  ) : (
+                    <View style={styles.thumbPlaceholder}>
+                      <Text style={styles.thumbEmoji}>🐾</Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.cardBody}>
+                  <Text style={styles.name}>{pet.name || 'İsimsiz'}</Text>
+                  <Text style={styles.meta}>
+                    {[pet.species, pet.breed].filter(Boolean).join(' · ') || '—'}
+                  </Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                  <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+                </View>
+              </Pressable>
+              <View style={styles.qrRow}>
+                <PetQrLinkActions tokenId={pet.token_id} petName={pet.name} compact />
               </View>
-              <View style={styles.cardBody}>
-                <Text style={styles.name}>{pet.name || 'İsimsiz'}</Text>
-                <Text style={styles.meta}>
-                  {[pet.species, pet.breed].filter(Boolean).join(' · ') || '—'}
-                </Text>
-                {pet.token_id ? (
-                  <Text style={styles.token}>QR: #{pet.token_id}</Text>
-                ) : null}
-              </View>
-              <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
-              </View>
-            </Pressable>
+            </View>
           );
         })}
       </ScrollView>
@@ -160,16 +162,20 @@ const styles = StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyTitle: { fontSize: 17, fontWeight: '700', color: BRAND.navy, marginBottom: 6 },
   emptySub: { fontSize: 14, color: BRAND.muted, textAlign: 'center' },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  cardWrap: {
     backgroundColor: BRAND.surface,
     borderRadius: 14,
-    padding: 12,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: BRAND.border,
+    overflow: 'hidden',
   },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+  },
+  qrRow: { paddingHorizontal: 12, paddingBottom: 12 },
   pressed: { opacity: 0.88 },
   cardLeft: { marginRight: 12 },
   thumb: { width: 56, height: 56, borderRadius: 12 },
@@ -185,7 +191,6 @@ const styles = StyleSheet.create({
   cardBody: { flex: 1 },
   name: { fontSize: 17, fontWeight: '700', color: BRAND.foreground },
   meta: { fontSize: 13, color: BRAND.muted, marginTop: 2 },
-  token: { fontSize: 11, color: '#94A3B8', marginTop: 4 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   badgeText: { fontSize: 12, fontWeight: '700' },
   fab: {

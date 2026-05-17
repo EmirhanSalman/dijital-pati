@@ -1,7 +1,7 @@
 import { ScrollView, View, Text, Pressable, StyleSheet, Image, Alert, RefreshControl } from 'react-native';
 import { MotiView } from 'moti';
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
 import { getPetLostLabel } from '../../../lib/pet-status';
 import { formatPetLocationDisplay } from '../../../lib/pet-location';
@@ -84,9 +84,11 @@ export default function LostPetsScreen() {
         </View>
       ) : null}
 
-      {pets.map((pet, i) => (
+      {pets.map((pet, i) => {
+        const petDbId = String(pet.id);
+        return (
         <MotiView
-          key={pet.id || i}
+          key={petDbId}
           from={{ opacity: 0, translateX: -20 }}
           animate={{ opacity: 1, translateX: 0 }}
           transition={{ type: 'timing', delay: i * 100, duration: 500 }}
@@ -94,10 +96,14 @@ export default function LostPetsScreen() {
           <Pressable
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
             onPress={() => {
-              router.push({
-                pathname: '/lost-pets/[id]',
-                params: { id: String(pet.id), from: 'list' },
-              });
+              if (__DEV__) {
+                console.log('[LostPets] opening pet detail', {
+                  id: petDbId,
+                  name: pet.name,
+                  token_id: pet.token_id,
+                });
+              }
+              router.push(`/(app)/lost-pets/${petDbId}?from=list` as Href);
             }}
           >
             <View style={styles.cardLeft}>
@@ -127,7 +133,8 @@ export default function LostPetsScreen() {
             </View>
           </Pressable>
         </MotiView>
-      ))}
+        );
+      })}
 
       <Pressable
         style={({ pressed }) => [styles.addBtn, pressed && styles.addBtnPressed]}

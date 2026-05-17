@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Pet } from "@/lib/supabase/server";
 import { QRCodeSVG } from "qrcode.react";
 import { getGatewayUrl } from "@/utils/ipfs";
+import { buildPetPublicUrl } from "@/lib/pet-public-url";
 
 export default function ProfilePetsTab() {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -293,7 +294,7 @@ export default function ProfilePetsTab() {
                   value={
                     typeof window !== "undefined"
                       ? `${window.location.origin}/pet/${selectedPet.token_id}`
-                      : `https://dijitalpati.com/pet/${selectedPet.token_id}`
+                      : buildPetPublicUrl(selectedPet.token_id)
                   }
                   size={256}
                   level="H"

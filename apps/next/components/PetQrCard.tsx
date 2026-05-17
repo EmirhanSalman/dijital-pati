@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
 import { AlertTriangle, CheckCircle } from "lucide-react";
+import { buildPetPublicUrl } from "@/lib/pet-public-url";
 
 interface PetQrCardProps {
   /** Public QR slug — must be pets.token_id, NOT pets.id */
@@ -26,8 +27,8 @@ export default function PetQrCard({
 }: PetQrCardProps) {
   const [isFlipped, setIsFlipped] = useState(false);
   
-  // Canonical: https://dijitalpati.com/pet/{token_id} — never use pets.id here
-  const qrUrl = petUrl || `https://dijitalpati.com/pet/${petId}`;
+  // Canonical public URL uses token_id — never pets.id
+  const qrUrl = petUrl || buildPetPublicUrl(petId);
 
   return (
     <div

@@ -51,7 +51,12 @@ const ACTIONS: ProfileAction[] = [
     route: '/(app)/profile/edit',
   },
   { emoji: '🔒', label: 'Gizlilik', description: 'Hesap güvenlik ayarları', comingSoon: true },
-  { emoji: '🔔', label: 'Bildirim Ayarları', description: 'Push ve hatırlatma tercihleri', route: '/(app)/settings' },
+  {
+    emoji: '🔔',
+    label: 'Bildirim Ayarları',
+    description: 'Bildirim kutusu ve tercihler',
+    route: '/(app)/notifications',
+  },
   {
     emoji: '🐾',
     label: 'Evcil Hayvanlarım',

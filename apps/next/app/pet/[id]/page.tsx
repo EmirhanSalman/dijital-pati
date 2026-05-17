@@ -27,6 +27,7 @@ import type { Pet } from "@/lib/supabase/server";
 import { getContract, getReadOnlyProvider } from "@/utils/web3";
 import { getGatewayUrl, fetchFromIpfsWithFallback } from "@/utils/ipfs";
 import ReportLostLocationDialog from "@/components/ReportLostLocationDialog";
+import { buildPetPublicUrl } from "@/lib/pet-public-url";
 
 // Get contract address from environment variable, with fallback for local development
 const getContractAddress = (): string => {
@@ -380,7 +381,7 @@ export default function PetPage({ params }: { params: Promise<{ id: string }> })
   const petUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/pet/${qrSlug}`
-      : `https://dijitalpati.com/pet/${qrSlug}`;
+      : buildPetPublicUrl(qrSlug);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12">

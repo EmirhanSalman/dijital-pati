@@ -25,7 +25,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
 
 # Supabase Service Role Key (YENİ - EKLEMEN GEREKİYOR)
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+
+# Public pet QR page base URL (optional — defaults to production Vercel)
+NEXT_PUBLIC_PET_PUBLIC_BASE_URL=https://dijital-pati.vercel.app
 ```
+
+Expo (`apps/expo/.env` or app config): same default via `EXPO_PUBLIC_PET_PUBLIC_BASE_URL` if you need a non-production base.
 
 ## 🔐 Service Role Key Nasıl Bulunur?
 

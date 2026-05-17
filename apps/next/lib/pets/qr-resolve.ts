@@ -1,5 +1,5 @@
 /**
- * QR identity: collars encode https://dijitalpati.com/pet/{token_id}
+ * QR identity: collars encode https://dijital-pati.vercel.app/pet/{token_id}
  * pet_scans.pet_id must always be pets.id (BIGINT), never token_id.
  */
 

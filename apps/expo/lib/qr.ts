@@ -1,6 +1,6 @@
 /**
  * Parses DigitalPati QR payloads (URL, deep link, or raw id).
- * Canonical QR URL: https://dijitalpati.com/pet/{token_id}
+ * Canonical QR URL: https://dijital-pati.vercel.app/pet/{token_id}
  * Legacy QRs may contain pets.id — resolved in pet-qr-resolve (token_id first).
  */
 

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { PetTextFields } from './pet-form';
 import { splitPetBreed } from './pet-form';
+import { buildFoundUpdate, buildLostLocationUpdate, type MapCoordinates } from './pet-coordinates';
 
 export type OwnedPet = {
   id: number | string;
@@ -107,6 +108,20 @@ export async function updateOwnPetText(
   text: PetTextFields
 ): Promise<void> {
   await updateOwnPet(petId, userId, text);
+}
+
+/** Mark own pet as lost — sets is_lost=true and map coordinates (never from text-only saves). */
+export async function markOwnPetAsLost(
+  petId: string | number,
+  userId: string,
+  coords: MapCoordinates
+): Promise<void> {
+  await updateOwnPet(petId, userId, buildLostLocationUpdate(coords));
+}
+
+/** Mark own pet as found — only sets is_lost=false (+ found_at). Scans cleared by DB trigger. */
+export async function markOwnPetAsFound(petId: string | number, userId: string): Promise<void> {
+  await updateOwnPet(petId, userId, buildFoundUpdate());
 }
 
 export async function deleteOwnPet(petId: string, userId: string): Promise<void> {

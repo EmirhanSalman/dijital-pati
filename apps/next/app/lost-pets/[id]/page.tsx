@@ -4,7 +4,8 @@ import { ArrowLeft, Calendar, MapPin, User, Lock, Phone, Mail, AlertTriangle } f
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getPetById, createClient, getUserProfile } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { getLostPetDetailForPage } from "@/lib/pets/public-access";
 import RemoteImage from "@/components/ui/RemoteImage";
 import { resolveImageUrl } from "@/lib/image-utils";
 import { formatDateTR } from "@/lib/utils/date";
@@ -15,35 +16,31 @@ interface LostPetDetailPageProps {
 
 export default async function LostPetDetailPage({ params }: LostPetDetailPageProps) {
   const { id } = await params;
-  const pet = await getPetById(id);
+  const result = await getLostPetDetailForPage(id);
 
-  // Pet bulunamazsa 404 göster
-  if (!pet) {
+  if (!result) {
     notFound();
   }
 
-  // Sadece kayıp hayvanları göster
-  if (!pet.is_lost) {
-    notFound();
-  }
+  const pet = result.pet;
+  const isLoggedIn = result.mode === "authenticated";
 
-  // Auth kontrolü
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const isLoggedIn = !!user;
+  let ownerProfile: {
+    id: string;
+    full_name: string | null;
+    username: string | null;
+    avatar_url: string | null;
+  } | null = null;
 
-  // Owner profil bilgilerini çek (eğer owner_id varsa)
-  let ownerProfile = null;
-  if (pet.owner_id) {
+  if (isLoggedIn && result.pet.owner_id) {
     try {
+      const supabase = await createClient();
       const { data: profile } = await supabase
         .from("profiles")
         .select("id, full_name, username, avatar_url")
-        .eq("id", pet.owner_id)
+        .eq("id", result.pet.owner_id)
         .single();
-      
+
       if (profile) {
         ownerProfile = profile;
       }
@@ -52,20 +49,20 @@ export default async function LostPetDetailPage({ params }: LostPetDetailPagePro
     }
   }
 
-  // Pet adını belirle
-  const petName = pet.name && pet.name.trim() && !pet.name.startsWith("Pati #") 
-    ? pet.name 
-    : `Pati #${pet.token_id}`;
+  const petName =
+    pet.name && pet.name.trim() && !pet.name.startsWith("Pati #")
+      ? pet.name
+      : `Pati #${pet.token_id}`;
 
-  // Tarihi formatla - using optimized utility to avoid timezone queries
-
-  // Son görülme tarihi (updated_at veya created_at)
-  const lastSeenDate = pet.updated_at 
+  const lastSeenDate = pet.updated_at
     ? formatDateTR(pet.updated_at, { year: "numeric", month: "long", day: "numeric" })
     : formatDateTR(pet.created_at, { year: "numeric", month: "long", day: "numeric" });
 
-  // İletişim bilgilerini hazırla
-  const hasContactInfo = !!(pet.contact_phone || pet.contact_email);
+  const contactPhone =
+    result.mode === "authenticated" ? result.pet.contact_phone : null;
+  const contactEmail =
+    result.mode === "authenticated" ? result.pet.contact_email : null;
+  const hasContactInfo = !!(contactPhone || contactEmail);
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -191,25 +188,25 @@ export default async function LostPetDetailPage({ params }: LostPetDetailPagePro
 
                     {hasContactInfo && (
                       <div className="space-y-2 pt-2 border-t">
-                        {pet.contact_phone && (
+                        {contactPhone && (
                           <div className="flex items-center gap-2">
                             <Phone className="h-4 w-4 text-muted-foreground" />
                             <a 
-                              href={`tel:${pet.contact_phone}`}
+                              href={`tel:${contactPhone}`}
                               className="text-primary hover:underline"
                             >
-                              {pet.contact_phone}
+                              {contactPhone}
                             </a>
                           </div>
                         )}
-                        {pet.contact_email && (
+                        {contactEmail && (
                           <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4 text-muted-foreground" />
                             <a 
-                              href={`mailto:${pet.contact_email}`}
+                              href={`mailto:${contactEmail}`}
                               className="text-primary hover:underline"
                             >
-                              {pet.contact_email}
+                              {contactEmail}
                             </a>
                           </div>
                         )}

@@ -3,6 +3,7 @@ import { MotiView } from 'moti';
 import { useState } from 'react';
 import { useAuth } from '../../_layout';
 import { useRouter } from 'expo-router';
+import { Bell } from 'lucide-react-native';
 
 const C = {
   primary:    '#6366F1',
@@ -82,13 +83,28 @@ export default function SettingsScreen() {
       >
         <Text style={styles.sectionTitle}>Tercihler</Text>
 
-        {/* Notifications — functional */}
-        <View style={styles.toggleRow}>
+        <Pressable
+          style={({ pressed }) => [styles.toggleRow, pressed && styles.pressed]}
+          onPress={() => router.push('/(app)/notifications')}
+        >
           <View style={styles.toggleLeft}>
             <Text style={styles.toggleEmoji}>🔔</Text>
             <View>
-              <Text style={styles.toggleLabel}>Bildirimler</Text>
-              <Text style={styles.toggleDesc}>Hatırlatmalar ve uyarılar</Text>
+              <Text style={styles.toggleLabel}>Bildirim Ayarları</Text>
+              <Text style={styles.toggleDesc}>Bildirim kutusunu aç</Text>
+            </View>
+          </View>
+          <Bell color={C.muted} size={20} />
+        </Pressable>
+
+        <View style={styles.divider} />
+
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleLeft}>
+            <Text style={styles.toggleEmoji}>📲</Text>
+            <View>
+              <Text style={[styles.toggleLabel, styles.disabledLabel]}>Push bildirimleri</Text>
+              <Text style={styles.toggleDesc}>Yakında</Text>
             </View>
           </View>
           <Switch
@@ -96,6 +112,7 @@ export default function SettingsScreen() {
             onValueChange={setNotifications}
             trackColor={{ false: '#D1D1D6', true: C.primary }}
             thumbColor="#fff"
+            disabled
           />
         </View>
 

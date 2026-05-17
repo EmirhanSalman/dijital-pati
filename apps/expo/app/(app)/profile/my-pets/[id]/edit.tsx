@@ -31,6 +31,7 @@ import {
 } from '../../../../../lib/pet-coordinates';
 import { pickImageUri, uploadImage, buildPetImagePath } from '../../../../../lib/storage';
 import { isLostPet } from '../../../../../lib/pet-status';
+import { PetQrLinkActions } from '../../../../../components/PetQrLinkActions';
 
 export default function EditPetScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -254,8 +255,12 @@ export default function EditPetScreen() {
         <Text style={styles.photoHint}>Fotoğrafı değiştir</Text>
       </Pressable>
 
-      {tokenId ? <Text style={styles.tokenLine}>QR kimliği (token_id): #{tokenId}</Text> : null}
-      <Text style={styles.idLine}>Veritabanı id: {id}</Text>
+      <Text style={styles.qrSectionTitle}>QR künye linki</Text>
+      <PetQrLinkActions tokenId={tokenId} petName={name} />
+      {tokenId ? (
+        <Text style={styles.tokenLine}>QR kimliği (token_id): #{tokenId}</Text>
+      ) : null}
+      <Text style={styles.idLine}>Veritabanı id: {id} (QR’da kullanılmaz)</Text>
 
       <Text style={styles.label}>Ad *</Text>
       <TextInput style={styles.input} value={name} onChangeText={setName} placeholderTextColor={BRAND.muted} />
@@ -355,7 +360,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   photoHint: { marginTop: 8, fontSize: 12, color: BRAND.muted },
-  tokenLine: { fontSize: 13, color: BRAND.primary, fontWeight: '600', marginBottom: 4 },
+  qrSectionTitle: { fontSize: 13, fontWeight: '700', color: BRAND.muted, marginBottom: 4 },
+  tokenLine: { fontSize: 13, color: BRAND.primary, fontWeight: '600', marginBottom: 4, marginTop: 8 },
   idLine: { fontSize: 12, color: BRAND.muted, marginBottom: 12 },
   label: { fontSize: 13, fontWeight: '700', color: BRAND.muted, marginBottom: 6, marginTop: 10 },
   input: {
