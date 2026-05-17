@@ -77,12 +77,12 @@ export default function CreateForumPostScreen() {
       });
 
       if (error) {
-        const missingColumn = error.message?.includes('image_url');
+        if (__DEV__) {
+          console.warn('[forum/create] insert failed', error);
+        }
         Alert.alert(
           'Kayıt hatası',
-          missingColumn
-            ? 'forum_posts.image_url sütunu yok. add_forum_post_image_and_storage_buckets.sql migrasyonunu çalıştırın.'
-            : error.message
+          'Forum gönderisi oluşturulamadı. Lütfen bağlantınızı kontrol edin.'
         );
         return;
       }

@@ -283,13 +283,18 @@ export default function ScannerScreen() {
           logScan('pet_scans insert error', error);
           const rlsHint =
             error.code === '42501' || error.message?.toLowerCase().includes('policy');
+          if (__DEV__) {
+            console.warn('[scanner] pet_scans insert failed', {
+              code: error.code,
+              message: error.message,
+              rlsHint,
+            });
+          }
           Alert.alert(
             'Kayıt hatası',
             rlsHint
-              ? 'İzin reddedildi. harden_pet_scans_and_pets_map_rls.sql migrasyonunu çalıştırın ve giriş yaptığınızdan emin olun.'
-              : error.message.includes('pet_scans')
-                ? 'pet_scans tablosu bulunamadı. create_pet_scans_table.sql migrasyonunu çalıştırın.'
-                : `Konum kaydedilemedi: ${error.message}`
+              ? 'QR kaydı oluşturulamadı. Giriş yaptığınızdan emin olun ve tekrar deneyin.'
+              : 'QR kaydı oluşturulamadı. Lütfen daha sonra tekrar deneyin.'
           );
           finishWithError();
           return;

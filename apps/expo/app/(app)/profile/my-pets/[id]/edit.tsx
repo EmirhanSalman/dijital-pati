@@ -260,7 +260,6 @@ export default function EditPetScreen() {
       {tokenId ? (
         <Text style={styles.tokenLine}>QR kimliği (token_id): #{tokenId}</Text>
       ) : null}
-      <Text style={styles.idLine}>Veritabanı id: {id} (QR’da kullanılmaz)</Text>
 
       <Text style={styles.label}>Ad *</Text>
       <TextInput style={styles.input} value={name} onChangeText={setName} placeholderTextColor={BRAND.muted} />
@@ -362,7 +361,6 @@ const styles = StyleSheet.create({
   photoHint: { marginTop: 8, fontSize: 12, color: BRAND.muted },
   qrSectionTitle: { fontSize: 13, fontWeight: '700', color: BRAND.muted, marginBottom: 4 },
   tokenLine: { fontSize: 13, color: BRAND.primary, fontWeight: '600', marginBottom: 4, marginTop: 8 },
-  idLine: { fontSize: 12, color: BRAND.muted, marginBottom: 12 },
   label: { fontSize: 13, fontWeight: '700', color: BRAND.muted, marginBottom: 6, marginTop: 10 },
   input: {
     backgroundColor: BRAND.surface,

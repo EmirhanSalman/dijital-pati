@@ -15,7 +15,7 @@ export default function LostPetsLayout() {
         animation: 'slide_from_right',
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Kayıplar' }} />
+      <Stack.Screen name="index" options={{ title: 'Kayıp İlanları' }} />
       <Stack.Screen
         name="[id]"
         options={{

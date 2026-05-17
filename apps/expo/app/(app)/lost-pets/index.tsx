@@ -22,15 +22,27 @@ const BRAND = {
 
 export default function LostPetsScreen() {
   const [pets, setPets] = useState<any[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
 
   const fetchPets = useCallback(async () => {
-    const { data } = await supabase
+    setFetchError(null);
+    const { data, error } = await supabase
       .from('pets')
       .select('*')
       .eq('is_lost', true)
       .order('lost_reported_at', { ascending: false, nullsFirst: false });
+
+    if (error) {
+      if (__DEV__) {
+        console.warn('[LostPets] fetch error', error);
+      }
+      setFetchError('Kayıp ilanları yüklenemedi.');
+      setPets([]);
+      return;
+    }
+
     setPets(data ?? []);
   }, []);
 
@@ -53,6 +65,14 @@ export default function LostPetsScreen() {
     }
   };
 
+  const handleNewListing = () => {
+    router.push('/(app)/profile/my-pets' as Href);
+    Alert.alert(
+      'Kayıp ilanı',
+      'Kayıp ilanı oluşturmak için evcil hayvanınızı seçip düzenleme ekranından kayıp olarak işaretleyebilirsiniz.'
+    );
+  };
+
   return (
     <ScrollView
       style={styles.screen}
@@ -72,11 +92,20 @@ export default function LostPetsScreen() {
         transition={{ type: 'timing', duration: 500 }}
         style={styles.banner}
       >
-        <Text style={styles.bannerTitle}>🔍 {pets.length} Aktif İlan</Text>
+        <Text style={styles.bannerTitle}>
+          🔍 {fetchError ? '—' : pets.length} Aktif İlan
+        </Text>
         <Text style={styles.bannerSub}>Bölgenizdeki kayıp hayvanlar</Text>
       </MotiView>
 
-      {pets.length === 0 ? (
+      {fetchError ? (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{fetchError}</Text>
+          <Text style={styles.errorBannerSub}>Aşağı çekerek yenileyebilirsiniz.</Text>
+        </View>
+      ) : null}
+
+      {!fetchError && pets.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>🐾</Text>
           <Text style={styles.emptyTitle}>Kayıp ilan yok</Text>
@@ -84,63 +113,63 @@ export default function LostPetsScreen() {
         </View>
       ) : null}
 
-      {pets.map((pet, i) => {
-        const petDbId = String(pet.id);
-        return (
-        <MotiView
-          key={petDbId}
-          from={{ opacity: 0, translateX: -20 }}
-          animate={{ opacity: 1, translateX: 0 }}
-          transition={{ type: 'timing', delay: i * 100, duration: 500 }}
-        >
-          <Pressable
-            style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-            onPress={() => {
-              if (__DEV__) {
-                console.log('[LostPets] opening pet detail', {
-                  id: petDbId,
-                  name: pet.name,
-                  token_id: pet.token_id,
-                });
-              }
-              router.push(`/(app)/lost-pets/${petDbId}?from=list` as Href);
-            }}
-          >
-            <View style={styles.cardLeft}>
-              <View style={styles.emojiCircle}>
-                {pet.image_url ? (
-                  <Image
-                    source={{ uri: pet.image_url.replace('ipfs://', 'https://ipfs.io/ipfs/') }}
-                    style={styles.petImage}
-                  />
-                ) : (
-                  <Text style={styles.emoji}>🐾</Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={styles.petName}>{pet.name}</Text>
-              <Text style={styles.petSpecies}>{pet.breed || pet.species || '—'}</Text>
-              <Text style={styles.petLocation} numberOfLines={1}>
-                📍 {formatPetLocationDisplay(pet)}
-              </Text>
-            </View>
-            <View style={styles.cardRight}>
-              <Text style={styles.date}>Yakın zamanda</Text>
-              <View style={styles.urgentBadge}>
-                <Text style={styles.urgentText}>{getPetLostLabel(pet)}</Text>
-              </View>
-            </View>
-          </Pressable>
-        </MotiView>
-        );
-      })}
+      {!fetchError
+        ? pets.map((pet, i) => {
+            const petDbId = String(pet.id);
+            return (
+              <MotiView
+                key={petDbId}
+                from={{ opacity: 0, translateX: -20 }}
+                animate={{ opacity: 1, translateX: 0 }}
+                transition={{ type: 'timing', delay: i * 100, duration: 500 }}
+              >
+                <Pressable
+                  style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+                  onPress={() => {
+                    if (__DEV__) {
+                      console.log('[LostPets] opening pet detail', {
+                        id: petDbId,
+                        name: pet.name,
+                        token_id: pet.token_id,
+                      });
+                    }
+                    router.push(`/(app)/lost-pets/${petDbId}?from=list` as Href);
+                  }}
+                >
+                  <View style={styles.cardLeft}>
+                    <View style={styles.emojiCircle}>
+                      {pet.image_url ? (
+                        <Image
+                          source={{ uri: pet.image_url.replace('ipfs://', 'https://ipfs.io/ipfs/') }}
+                          style={styles.petImage}
+                        />
+                      ) : (
+                        <Text style={styles.emoji}>🐾</Text>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.cardBody}>
+                    <Text style={styles.petName}>{pet.name}</Text>
+                    <Text style={styles.petSpecies}>{pet.breed || pet.species || '—'}</Text>
+                    <Text style={styles.petLocation} numberOfLines={1}>
+                      📍 {formatPetLocationDisplay(pet)}
+                    </Text>
+                  </View>
+                  <View style={styles.cardRight}>
+                    <Text style={styles.date}>Yakın zamanda</Text>
+                    <View style={styles.urgentBadge}>
+                      <Text style={styles.urgentText}>{getPetLostLabel(pet)}</Text>
+                    </View>
+                  </View>
+                </Pressable>
+              </MotiView>
+            );
+          })
+        : null}
 
       <Pressable
         style={({ pressed }) => [styles.addBtn, pressed && styles.addBtnPressed]}
-        onPress={() => {
-          Alert.alert('Yeni İlan', 'Kayıp ilanı web üzerinden veya yakında mobilde oluşturulabilir.');
-        }}
+        onPress={handleNewListing}
       >
         <Text style={styles.addBtnText}>+ Yeni İlan Ver</Text>
       </Pressable>
@@ -159,6 +188,16 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 4 },
   bannerSub: { fontSize: 14, color: BRAND.primaryMid },
+  errorBanner: {
+    backgroundColor: BRAND.dangerBg,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorBannerText: { fontSize: 15, fontWeight: '700', color: BRAND.danger, marginBottom: 4 },
+  errorBannerSub: { fontSize: 13, color: BRAND.muted },
   empty: { alignItems: 'center', paddingVertical: 32, marginBottom: 16 },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: BRAND.navy, marginBottom: 6 },

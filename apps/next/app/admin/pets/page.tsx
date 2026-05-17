@@ -101,11 +101,15 @@ export default async function AdminPetsPage() {
                       ID: #{pet.token_id} | DB ID: {pet.id}
                     </p>
                     <div className="flex gap-2 items-center justify-between">
-                      <Link href={`/pet/${pet.id}`}>
-                        <button className="text-sm text-primary hover:underline">
-                          Detayları Gör
-                        </button>
-                      </Link>
+                      {pet.token_id ? (
+                        <Link href={`/pet/${pet.token_id}`}>
+                          <button className="text-sm text-primary hover:underline">
+                            Detayları Gör
+                          </button>
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">QR kimliği yok</span>
+                      )}
                       <AdminDeleteButton petId={pet.id} />
                     </div>
                   </CardContent>

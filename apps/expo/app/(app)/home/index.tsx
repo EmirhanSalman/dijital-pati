@@ -85,7 +85,7 @@ export default function HomeScreen() {
     },
     {
       emoji: '🔍',
-      label: 'Kayıp İlanları',
+      label: 'Aktif Kayıp İlanları',
       value: statsLoading ? '…' : statsError ? '—' : String(lostCount ?? 0),
       color: BRAND.danger,
     },
